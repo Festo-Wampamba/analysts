@@ -1,0 +1,33 @@
+name: Daily stock idea screen
+
+# 13:00 UTC on weekdays — after the US pre-market settles and well before the
+# close, so the screen sees the current session's opening data. The run is
+# idempotent per US trading date, so an extra trigger is harmless.
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily screen
+        run: |
+          response=$(mktemp)
+          status=$(curl -sS -o "$response" -w '%{http_code}' \
+            --max-time 900 \
+            -X POST "${SCREEN_URL}" \
+            -H "authorization: Bearer ${CRON_SECRET}")
+
+          echo "HTTP $status"
+          jq '{tradingDate, status, universeEvaluated, highestScore, ticker: .idea.facts.ticker, emailDelivered, alreadyRan}' \
+            < "$response" || cat "$response"
+
+          if [ "$status" != "200" ] && [ "$status" != "201" ]; then
+            echo "::error::screen run failed with HTTP $status"
+            exit 1
+          fi
+        env:
+          SCREEN_URL: ${{ secrets.SCREEN_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
