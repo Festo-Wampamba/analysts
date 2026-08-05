@@ -1,0 +1,108 @@
+// Guards between the model and the user (Final-design.md §16 hallucination
+// prevention; interview question "how is numerical information validated").
+//
+// Numeric guard: generated prose may only contain numbers traceable to the
+// sourced-facts allowlist. Extraction is deliberately aggressive (currency,
+// separators, magnitude suffixes, percents) so reformatting can't smuggle an
+// invented figure past the check.
+
+export type NumericClaim = {
+  raw: string;
+  value: number;
+};
+
+export type NumericGuardResult = {
+  ok: boolean;
+  violations: NumericClaim[];
+  claims: NumericClaim[];
+};
+
+const SUFFIX_MULTIPLIERS: Record<string, number> = {
+  k: 1e3,
+  m: 1e6,
+  mm: 1e6,
+  million: 1e6,
+  b: 1e9,
+  bn: 1e9,
+  billion: 1e9,
+  t: 1e12,
+  tn: 1e12,
+  trillion: 1e12,
+};
+
+const NUMBER_PATTERN = new RegExp(
+  String.raw`(?<![\w.])[$€£]?\s?` + // optional currency prefix
+    String.raw`(-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?)` + // digits
+    String.raw`\s?(k|m|mm|million|b|bn|billion|t|tn|trillion)?\b` + // magnitude
+    String.raw`(\s?%)?`, // percent
+  "gi",
+);
+
+export function extractNumericClaims(text: string): NumericClaim[] {
+  const claims: NumericClaim[] = [];
+  for (const match of text.matchAll(NUMBER_PATTERN)) {
+    const [raw, digits, suffix] = match;
+    const bare = digits.replace(/,/g, "");
+    const value = Number(bare) * (suffix ? SUFFIX_MULTIPLIERS[suffix.toLowerCase()] : 1);
+    if (!Number.isFinite(value)) continue;
+    claims.push({ raw: raw.trim(), value });
+  }
+  return claims;
+}
+
+// Tolerance from displayed precision: "228" may stand for anything in
+// [227.5, 228.5); "1.2B" for anything within ±0.05B. Half a unit of the last
+// displayed digit, scaled by any magnitude suffix.
+function toleranceOf(claim: NumericClaim): number {
+  const digitsMatch = claim.raw.match(/-?\d[\d,]*(?:\.(\d+))?/);
+  const decimals = digitsMatch?.[1]?.length ?? 0;
+  const suffix = claim.raw.match(/(k|m|mm|million|b|bn|billion|t|tn|trillion)\b/i)?.[1];
+  const scale = suffix ? SUFFIX_MULTIPLIERS[suffix.toLowerCase()] : 1;
+  return 0.5 * 10 ** -decimals * scale;
+}
+
+function isExemptInteger(claim: NumericClaim, allowYears: boolean): boolean {
+  const isBareInteger = /^-?\d+$/.test(claim.raw);
+  if (!isBareInteger) return false;
+  // Small counts read as prose ("3 scenarios", "top 5"), not data claims.
+  if (Math.abs(claim.value) <= 12) return true;
+  // Years appear constantly in narrative ("since 2019"); low-risk by default.
+  if (allowYears && claim.value >= 1900 && claim.value <= 2100) return true;
+  return false;
+}
+
+export function verifyNumericClaims(
+  text: string,
+  allowedNumbers: number[],
+  opts: { allowYears?: boolean } = {},
+): NumericGuardResult {
+  const allowYears = opts.allowYears ?? true;
+  const claims = extractNumericClaims(text);
+
+  const violations = claims.filter((claim) => {
+    if (isExemptInteger(claim, allowYears)) return false;
+    const tolerance = toleranceOf(claim);
+    return !allowedNumbers.some(
+      (allowed) => Math.abs(claim.value - allowed) <= tolerance,
+    );
+  });
+
+  return { ok: violations.length === 0, violations, claims };
+}
+
+// Adversarial input sanitization: external text (news headlines, summaries)
+// flows into LLM prompts. This cannot make injected English harmless — the
+// prompt must still frame it as data — but it removes the cheap tricks:
+// control characters, zero-width/bidi characters, runaway length.
+const CONTROL_AND_INVISIBLE =
+  /[\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202E\u2060-\u2064\uFEFF]/g;
+
+export function sanitizeSourceText(text: string, maxLength = 500): string {
+  // Collapse whitespace before stripping controls so \n and \t become
+  // spaces instead of vanishing and joining words.
+  const cleaned = text
+    .replace(/\s+/g, " ")
+    .replace(CONTROL_AND_INVISIBLE, "")
+    .trim();
+  return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength - 1)}…`;
+}

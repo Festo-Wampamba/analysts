@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { db, schema } from "@/lib/db";
 import type { Provenance } from "@/lib/domain/provenance";
+import { recordSourceCall } from "@/lib/source/log";
 import {
   insiderTransactionsSchema,
   metricsSchema,
@@ -50,36 +50,10 @@ export type Sourced<T> = {
   provenance: Provenance;
 };
 
-async function logSourceCall(row: {
-  endpoint: string;
-  ticker?: string;
-  httpStatus?: number;
-  providerTimestamp?: Date;
-  fetchedAt: Date;
-  latencyMs: number;
-  status: "fresh" | "failed";
-  reportId?: number;
-  runId?: number;
-  meta?: Record<string, unknown>;
-}): Promise<void> {
-  try {
-    await db.insert(schema.sourceCalls).values({
-      provider: PROVIDER,
-      endpoint: row.endpoint,
-      ticker: row.ticker,
-      httpStatus: row.httpStatus,
-      providerTimestamp: row.providerTimestamp,
-      fetchedAt: row.fetchedAt,
-      latencyMs: row.latencyMs,
-      status: row.status,
-      reportId: row.reportId,
-      runId: row.runId,
-      meta: row.meta,
-    });
-  } catch (err) {
-    // Audit logging must not turn a successful provider call into a failure.
-    console.error("source_calls insert failed:", (err as Error).message);
-  }
+function logSourceCall(
+  row: Omit<Parameters<typeof recordSourceCall>[0], "provider">,
+): Promise<void> {
+  return recordSourceCall({ provider: PROVIDER, ...row });
 }
 
 async function finnhubGet<S extends z.ZodType>(
