@@ -224,11 +224,21 @@ export async function getResearchReport(ticker: string): Promise<ResearchReport>
 
   if (!hasMinimumFacts(facts)) {
     // Finnhub answers unknown tickers with HTTP 200 and empty payloads, so an
-    // empty identity/price pair is the real "no such ticker" signal.
-    const providersUp = failedProviders.length < 6;
-    throw providersUp
+    // explicitly empty quote with no company is the real "no such ticker"
+    // signal. If either required fact exists, a missing counterpart is source
+    // degradation and must not be misreported as an invalid symbol.
+    const quoteReturnedEmpty =
+      !failedProviders.includes("quote") && facts.quote === undefined;
+    const tickerLooksUnknown =
+      quoteReturnedEmpty && facts.company === undefined;
+
+    throw tickerLooksUnknown
       ? new ReportError("unknown_ticker", `no company or price data for ${ticker}`)
-      : new ReportError("sources_unavailable", "all data providers failed");
+      : new ReportError(
+          "sources_unavailable",
+          "required company or quote data is unavailable",
+          { failedProviders },
+        );
   }
 
   const allowlist = buildNumericAllowlist(facts);

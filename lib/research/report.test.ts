@@ -243,6 +243,26 @@ describe("getResearchReport generation", () => {
     });
   });
 
+  it("reports sources_unavailable when profile fails for a valid quote", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getProfile).mockRejectedValue(new Error("profile rate limited"));
+
+    await expect(getResearchReport("AAPL")).rejects.toMatchObject({
+      code: "sources_unavailable",
+      details: { failedProviders: ["profile"] },
+    });
+  });
+
+  it("reports sources_unavailable when quote fails for a valid profile", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getQuote).mockRejectedValue(new Error("quote rate limited"));
+
+    await expect(getResearchReport("AAPL")).rejects.toMatchObject({
+      code: "sources_unavailable",
+      details: { failedProviders: ["quote"] },
+    });
+  });
+
   it("reports sources_unavailable when every provider fails", async () => {
     for (const call of [
       getQuote,

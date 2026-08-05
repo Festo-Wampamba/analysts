@@ -389,6 +389,21 @@ describe("runDailyScreen idempotency", () => {
 });
 
 describe("runDailyScreen failure isolation", () => {
+  it("marks the run failed when every universe ticker fails to load", async () => {
+    mockHappyPath();
+    vi.mocked(fetchUniverseCandidates).mockResolvedValue({
+      candidates: [],
+      failedTickers: universe.map(({ ticker }) => ticker),
+    });
+
+    await expect(runDailyScreen(universe)).rejects.toThrow(
+      "unable to evaluate any of 2 universe tickers",
+    );
+
+    expect(state.updatedRuns[0]).toMatchObject({ status: "failed" });
+    expect(state.insertedIdeas).toHaveLength(0);
+  });
+
   it("keeps the run complete when email delivery fails", async () => {
     mockHappyPath();
     vi.mocked(sendEmail).mockResolvedValue({ delivered: false, error: "smtp down" });

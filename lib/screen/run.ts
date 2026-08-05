@@ -308,7 +308,23 @@ export async function runDailyScreen(
   if (!claimed) return readExistingRun(tradingDate, runId);
 
   try {
-    const { candidates } = await fetchUniverseCandidates(universe, runId);
+    const { candidates, failedTickers } = await fetchUniverseCandidates(
+      universe,
+      runId,
+    );
+    // An empty evaluated universe is not a legitimate "no idea" result when
+    // every requested ticker failed at the provider boundary. Fail the run so
+    // claimRun can reclaim it on the next cron attempt instead of allowing the
+    // trading-date uniqueness constraint to suppress retries for the day.
+    if (
+      universe.length > 0 &&
+      candidates.length === 0 &&
+      failedTickers.length === universe.length
+    ) {
+      throw new ScreenError(
+        `unable to evaluate any of ${universe.length} universe tickers`,
+      );
+    }
     const scored = scoreCandidates(candidates, DEFAULT_SCORING_CONFIG);
     const top = scored.slice(0, TOP_CANDIDATES);
     const winner = scored.find((c) => c.qualified) ?? null;
