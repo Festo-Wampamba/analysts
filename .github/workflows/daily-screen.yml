@@ -16,18 +16,60 @@ jobs:
         run: |
           response=$(mktemp)
           status=$(curl -sS -o "$response" -w '%{http_code}' \
-            --max-time 900 \
+            --max-time 30 \
             -X POST "${SCREEN_URL}" \
             -H "authorization: Bearer ${CRON_SECRET}")
 
           echo "HTTP $status"
-          jq '{tradingDate, status, universeEvaluated, highestScore, ticker: .idea.facts.ticker, emailDelivered, alreadyRan}' \
-            < "$response" || cat "$response"
+          cat "$response"
 
-          if [ "$status" != "200" ] && [ "$status" != "201" ]; then
-            echo "::error::screen run failed with HTTP $status"
+          if [ "$status" != "200" ] && [ "$status" != "202" ]; then
+            echo "::error::screen trigger failed with HTTP $status"
             exit 1
           fi
+        env:
+          SCREEN_URL: ${{ secrets.SCREEN_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      # The screen runs in the background on the origin (~3 min); poll
+      # instead of holding one long connection, which is what the 524 was.
+      - name: Poll for completion
+        run: |
+          deadline=$((SECONDS + 300))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            response=$(mktemp)
+            status=$(curl -sS -o "$response" -w '%{http_code}' \
+              --max-time 15 \
+              "${SCREEN_URL}" \
+              -H "authorization: Bearer ${CRON_SECRET}")
+
+            if [ "$status" = "200" ]; then
+              run_status=$(jq -r '.status' < "$response")
+              case "$run_status" in
+                complete|no_qualifying_idea)
+                  jq '{tradingDate, status, universeEvaluated, highestScore, ticker: .idea.facts.ticker, emailDelivered}' \
+                    < "$response"
+                  exit 0
+                  ;;
+                failed)
+                  echo "::error::screen run failed: $(jq -r '.runError' < "$response")"
+                  exit 1
+                  ;;
+                running)
+                  sleep 10
+                  ;;
+                *)
+                  echo "::error::unexpected status: $run_status"
+                  exit 1
+                  ;;
+              esac
+            else
+              sleep 10
+            fi
+          done
+
+          echo "::error::screen did not complete within 5 minutes of polling"
+          exit 1
         env:
           SCREEN_URL: ${{ secrets.SCREEN_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
