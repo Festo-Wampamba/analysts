@@ -30,7 +30,7 @@ export type DailyIdeaPayload = {
 export type ScreenRunResult = {
   tradingDate: string;
   runId: number;
-  status: "complete" | "no_qualifying_idea" | "running";
+  status: "complete" | "no_qualifying_idea" | "running" | "failed";
   universeSize: number;
   universeEvaluated: number;
   threshold: number;
@@ -40,4 +40,6 @@ export type ScreenRunResult = {
   emailDelivered: boolean;
   emailError: string | null;
   alreadyRan: boolean;
+  /** Set only when status is "failed". */
+  runError?: string | null;
 };

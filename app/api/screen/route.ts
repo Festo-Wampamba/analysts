@@ -1,12 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
-import { runDailyScreen } from "@/lib/screen/run";
+import {
+  claimScreenRun,
+  getScreenStatus,
+  runScreenInBackground,
+} from "@/lib/screen/run";
+import { currentTradingDate } from "@/lib/screen/trading-date";
 
 export const dynamic = "force-dynamic";
-// A full screen fetches the universe under a rate-limit floor, so the run
-// takes minutes rather than seconds.
-export const maxDuration = 800;
 
 function isAuthorized(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
@@ -18,21 +20,38 @@ function isAuthorized(request: Request): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-// POST triggers the screen; it writes, costs hundreds of provider calls, and
-// sends mail, so it is never exposed unauthenticated.
+// POST claims the trading date and starts the screen, then returns
+// immediately — the run itself takes ~3 minutes (hundreds of provider
+// calls), longer than the Cloudflare proxy will hold a connection open.
+// Callers poll GET for completion.
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  try {
-    const result = await runDailyScreen();
-    return NextResponse.json(result, { status: result.alreadyRan ? 200 : 201 });
-  } catch (err) {
-    console.error("screen run failed:", err);
-    return NextResponse.json(
-      { error: "screen_failed", message: (err as Error).message },
-      { status: 500 },
-    );
+  const { runId, tradingDate, claimed } = await claimScreenRun();
+
+  if (!claimed) {
+    const status = await getScreenStatus(tradingDate);
+    return NextResponse.json(status, { status: 200 });
   }
+
+  runScreenInBackground(runId, tradingDate);
+  return NextResponse.json(
+    { tradingDate, runId, status: "running", alreadyRan: false },
+    { status: 202 },
+  );
+}
+
+// GET polls the status of today's trading-date run.
+export async function GET(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const status = await getScreenStatus(currentTradingDate());
+  if (!status) {
+    return NextResponse.json({ error: "not_started" }, { status: 404 });
+  }
+  return NextResponse.json(status);
 }

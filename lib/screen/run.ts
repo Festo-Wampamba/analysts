@@ -204,11 +204,16 @@ async function generateVerifiedIdea(
   return { narrative: second.result.data, generated: second.result.meta };
 }
 
+// A run stuck in "running" past this long is presumed to belong to a
+// process that died mid-run (e.g. a Dokploy redeploy) rather than one still
+// working — the real run finishes in ~3 minutes.
+const STALE_RUNNING_MS = 10 * 60 * 1000;
+
 // Idempotency: screen_runs.trading_date is unique, so a second call on the
 // same trading date loses the insert race and returns the stored result
 // instead of spending another few hundred provider calls. A previously
-// failed run is the exception — the cron retries it, so its row is reclaimed
-// and re-run rather than returned as a permanent result.
+// failed or stale-running run is the exception — it's reclaimed and re-run
+// rather than returned as a permanent result.
 async function claimRun(
   tradingDate: string,
   universeSize: number,
@@ -228,18 +233,28 @@ async function claimRun(
   if (inserted) return { runId: inserted.id, claimed: true };
 
   const [existing] = await db
-    .select({ id: schema.screenRuns.id, status: schema.screenRuns.status })
+    .select({
+      id: schema.screenRuns.id,
+      status: schema.screenRuns.status,
+      startedAt: schema.screenRuns.startedAt,
+    })
     .from(schema.screenRuns)
     .where(eq(schema.screenRuns.tradingDate, tradingDate))
     .limit(1);
 
-  if (existing.status !== "failed") return { runId: existing.id, claimed: false };
+  const isStaleRunning =
+    existing.status === "running" &&
+    Date.now() - existing.startedAt.getTime() > STALE_RUNNING_MS;
+
+  if (existing.status !== "failed" && !isStaleRunning) {
+    return { runId: existing.id, claimed: false };
+  }
 
   await db
     .update(schema.screenRuns)
     .set({ status: "running", startedAt: new Date(), error: null })
     .where(eq(schema.screenRuns.id, existing.id));
-  // Candidates from the failed attempt would otherwise duplicate.
+  // Candidates from the failed/stale attempt would otherwise duplicate.
   await db
     .delete(schema.screenCandidates)
     .where(eq(schema.screenCandidates.runId, existing.id));
@@ -271,9 +286,11 @@ async function readExistingRun(
   return {
     tradingDate,
     runId,
-    // "failed" is never reached here: claimRun reclaims failed runs instead
-    // of returning them.
-    status: run.status === "running" ? "running" : run.status === "no_qualifying_idea" ? "no_qualifying_idea" : "complete",
+    // claimRun reclaims failed/stale runs when called through
+    // runDailyScreen, but getScreenStatus reads this row directly without
+    // going through claimRun first, so "failed" can genuinely appear here.
+    status: run.status,
+    runError: run.status === "failed" ? run.error : undefined,
     universeSize: run.universeSize,
     universeEvaluated: run.universeEvaluated,
     threshold: Number(run.threshold),
@@ -298,15 +315,12 @@ async function readExistingRun(
   };
 }
 
-export async function runDailyScreen(
-  universe: UniverseEntry[] = SCREEN_UNIVERSE,
+async function executeScreen(
+  runId: number,
+  tradingDate: string,
+  universe: UniverseEntry[],
+  startedAt: number,
 ): Promise<ScreenRunResult> {
-  const tradingDate = currentTradingDate();
-  const startedAt = Date.now();
-
-  const { runId, claimed } = await claimRun(tradingDate, universe.length);
-  if (!claimed) return readExistingRun(tradingDate, runId);
-
   try {
     const { candidates, failedTickers } = await fetchUniverseCandidates(
       universe,
@@ -432,4 +446,56 @@ export async function runDailyScreen(
       .where(eq(schema.screenRuns.id, runId));
     throw err;
   }
+}
+
+export async function runDailyScreen(
+  universe: UniverseEntry[] = SCREEN_UNIVERSE,
+): Promise<ScreenRunResult> {
+  const tradingDate = currentTradingDate();
+  const startedAt = Date.now();
+
+  const { runId, claimed } = await claimRun(tradingDate, universe.length);
+  if (!claimed) return readExistingRun(tradingDate, runId);
+
+  return executeScreen(runId, tradingDate, universe, startedAt);
+}
+
+// Claims today's trading date without running the screen, so a caller (the
+// HTTP route) can respond immediately instead of holding the connection
+// open for the ~3 minutes the screen takes.
+export async function claimScreenRun(
+  universe: UniverseEntry[] = SCREEN_UNIVERSE,
+): Promise<{ runId: number; tradingDate: string; claimed: boolean }> {
+  const tradingDate = currentTradingDate();
+  const { runId, claimed } = await claimRun(tradingDate, universe.length);
+  return { runId, tradingDate, claimed };
+}
+
+// Runs the screen without the caller awaiting it. The process is a
+// long-lived Node container (not serverless), so work continues after the
+// HTTP response is sent. Errors are caught here only to stop them becoming
+// an unhandled rejection — executeScreen already records failure on the run.
+export function runScreenInBackground(
+  runId: number,
+  tradingDate: string,
+  universe: UniverseEntry[] = SCREEN_UNIVERSE,
+): void {
+  void executeScreen(runId, tradingDate, universe, Date.now()).catch((err) => {
+    console.error("background screen run failed:", err);
+  });
+}
+
+// Read-only status lookup for polling, keyed by trading date rather than a
+// runId the caller may not have yet (e.g. a GitHub Actions poll loop).
+export async function getScreenStatus(
+  tradingDate: string,
+): Promise<ScreenRunResult | null> {
+  const [run] = await db
+    .select({ id: schema.screenRuns.id })
+    .from(schema.screenRuns)
+    .where(eq(schema.screenRuns.tradingDate, tradingDate))
+    .limit(1);
+
+  if (!run) return null;
+  return readExistingRun(tradingDate, run.id);
 }

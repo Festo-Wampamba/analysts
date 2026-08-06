@@ -5,7 +5,9 @@ import type { CandidateInput } from "./score";
 
 // A minimal in-memory stand-in for the three tables the run touches.
 const state = {
-  existingRun: null as { id: number; status: string } | null,
+  existingRun: null as
+    | { id: number; status: string; startedAt?: Date; error?: string }
+    | null,
   insertedRuns: [] as Record<string, unknown>[],
   insertedCandidates: [] as Record<string, unknown>[],
   insertedIdeas: [] as Record<string, unknown>[],
@@ -115,7 +117,12 @@ import { groqJson } from "@/lib/ai/groq";
 import { sendEmail } from "@/lib/email/resend";
 import { getCompanyNews, getProfile, getQuote } from "@/lib/source/finnhub";
 import { fetchUniverseCandidates } from "./fetch";
-import { runDailyScreen } from "./run";
+import {
+  claimScreenRun,
+  getScreenStatus,
+  runDailyScreen,
+  runScreenInBackground,
+} from "./run";
 import type { UniverseEntry } from "./universe";
 
 const universe: UniverseEntry[] = [
@@ -448,5 +455,122 @@ describe("runDailyScreen failure isolation", () => {
     });
 
     await expect(runDailyScreen(universe)).rejects.toThrow(/unverifiable figures/);
+  });
+});
+
+describe("claimScreenRun", () => {
+  it("claims today's run without executing the screen", async () => {
+    const result = await claimScreenRun(universe);
+
+    expect(result.claimed).toBe(true);
+    expect(fetchUniverseCandidates).not.toHaveBeenCalled();
+  });
+
+  it("reports not claimed when a run already exists", async () => {
+    state.claimConflicts = true;
+    state.existingRun = { id: 1, status: "complete" };
+
+    const result = await claimScreenRun(universe);
+
+    expect(result.claimed).toBe(false);
+  });
+});
+
+describe("runScreenInBackground", () => {
+  it("returns without waiting for the screen to finish", () => {
+    mockHappyPath();
+    const result = runScreenInBackground(1, "2026-08-05", universe);
+    expect(result).toBeUndefined();
+  });
+
+  it("executes the screen in the background", async () => {
+    mockHappyPath();
+    runScreenInBackground(1, "2026-08-05", universe);
+
+    await vi.waitFor(() => {
+      expect(fetchUniverseCandidates).toHaveBeenCalled();
+    });
+  });
+
+  it("logs rather than throws when the background run fails", async () => {
+    vi.mocked(fetchUniverseCandidates).mockRejectedValue(new Error("finnhub down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    runScreenInBackground(1, "2026-08-05", universe);
+
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        "background screen run failed:",
+        expect.any(Error),
+      );
+    });
+  });
+});
+
+describe("getScreenStatus", () => {
+  it("returns null when no run exists for the trading date", async () => {
+    const result = await getScreenStatus("2026-08-05");
+    expect(result).toBeNull();
+  });
+
+  it("surfaces a failed run's status and error", async () => {
+    state.existingRun = { id: 1, status: "failed", error: "finnhub down" };
+
+    const result = await getScreenStatus("2026-08-05");
+
+    expect(result).toMatchObject({ status: "failed", runError: "finnhub down" });
+  });
+
+  it("reports a running screen without a stored idea", async () => {
+    state.existingRun = { id: 1, status: "running", startedAt: new Date() };
+
+    const result = await getScreenStatus("2026-08-05");
+
+    expect(result?.status).toBe("running");
+  });
+});
+
+describe("claimRun stale-running reclaim", () => {
+  it("reclaims a running run stuck past the staleness window", async () => {
+    mockHappyPath();
+    state.claimConflicts = true;
+    state.existingRun = {
+      id: 1,
+      status: "running",
+      startedAt: new Date(Date.now() - 11 * 60 * 1000),
+    };
+
+    const result = await runDailyScreen(universe);
+
+    expect(result.alreadyRan).toBe(false);
+  });
+
+  it("clears the stale attempt's candidates before re-running", async () => {
+    mockHappyPath();
+    state.claimConflicts = true;
+    state.existingRun = {
+      id: 1,
+      status: "running",
+      startedAt: new Date(Date.now() - 11 * 60 * 1000),
+    };
+
+    await runDailyScreen(universe);
+
+    expect(state.deletedCandidateRuns).toHaveLength(1);
+  });
+
+  it("does not reclaim a running run inside the staleness window", async () => {
+    mockHappyPath();
+    state.claimConflicts = true;
+    state.existingRun = {
+      id: 1,
+      status: "running",
+      startedAt: new Date(Date.now() - 1 * 60 * 1000),
+    };
+
+    const result = await runDailyScreen(universe);
+
+    expect(result.alreadyRan).toBe(true);
+    expect(fetchUniverseCandidates).not.toHaveBeenCalled();
   });
 });
