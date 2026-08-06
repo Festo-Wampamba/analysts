@@ -21,7 +21,8 @@ jobs:
             -H "authorization: Bearer ${CRON_SECRET}")
 
           echo "HTTP $status"
-          cat "$response"
+          jq '{tradingDate, status, universeEvaluated, highestScore, ticker: .idea.facts.ticker, emailDelivered}' \
+            < "$response"
 
           if [ "$status" != "200" ] && [ "$status" != "202" ]; then
             echo "::error::screen trigger failed with HTTP $status"
