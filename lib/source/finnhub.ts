@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { Provenance } from "@/lib/domain/provenance";
+import { fetchWithRetry } from "@/lib/http/retry";
 import { recordSourceCall } from "@/lib/source/log";
 import {
   insiderTransactionsSchema,
@@ -76,7 +77,7 @@ async function finnhubGet<S extends z.ZodType>(
 
   let res: Response;
   try {
-    res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await fetchWithRetry(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (cause) {
     await logSourceCall({
       endpoint,
