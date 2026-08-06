@@ -21,12 +21,13 @@ jobs:
             -H "authorization: Bearer ${CRON_SECRET}")
 
           echo "HTTP $status"
-          cat "$response"
-
           if [ "$status" != "200" ] && [ "$status" != "202" ]; then
+            cat "$response"
             echo "::error::screen trigger failed with HTTP $status"
             exit 1
           fi
+          jq '{tradingDate, status, universeEvaluated, highestScore, ticker: .idea.facts.ticker, emailDelivered}' \
+            < "$response"
         env:
           SCREEN_URL: ${{ secrets.SCREEN_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

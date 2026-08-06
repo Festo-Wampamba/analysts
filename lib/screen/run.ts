@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, lt, or } from "drizzle-orm";
 
 import { groqJson } from "@/lib/ai/groq";
 import { sanitizeSourceText, verifyNumericClaims } from "@/lib/ai/guards";
@@ -232,34 +232,44 @@ async function claimRun(
 
   if (inserted) return { runId: inserted.id, claimed: true };
 
+  // Single conditional UPDATE, not SELECT-then-UPDATE: the WHERE clause
+  // itself is the reclaimability check, so two concurrent requests can't
+  // both pass a check and both win the claim. Only the row matching this
+  // trading date AND currently in a reclaimable state gets updated; an
+  // empty .returning() means either the row isn't reclaimable or another
+  // request's UPDATE already won the race.
+  const [reclaimed] = await db
+    .update(schema.screenRuns)
+    .set({ status: "running", startedAt: new Date(), error: null })
+    .where(
+      and(
+        eq(schema.screenRuns.tradingDate, tradingDate),
+        or(
+          eq(schema.screenRuns.status, "failed"),
+          and(
+            eq(schema.screenRuns.status, "running"),
+            lt(schema.screenRuns.startedAt, new Date(Date.now() - STALE_RUNNING_MS)),
+          ),
+        ),
+      ),
+    )
+    .returning({ id: schema.screenRuns.id });
+
+  if (reclaimed) {
+    // Candidates from the failed/stale attempt would otherwise duplicate.
+    await db
+      .delete(schema.screenCandidates)
+      .where(eq(schema.screenCandidates.runId, reclaimed.id));
+    return { runId: reclaimed.id, claimed: true };
+  }
+
   const [existing] = await db
-    .select({
-      id: schema.screenRuns.id,
-      status: schema.screenRuns.status,
-      startedAt: schema.screenRuns.startedAt,
-    })
+    .select({ id: schema.screenRuns.id })
     .from(schema.screenRuns)
     .where(eq(schema.screenRuns.tradingDate, tradingDate))
     .limit(1);
 
-  const isStaleRunning =
-    existing.status === "running" &&
-    Date.now() - existing.startedAt.getTime() > STALE_RUNNING_MS;
-
-  if (existing.status !== "failed" && !isStaleRunning) {
-    return { runId: existing.id, claimed: false };
-  }
-
-  await db
-    .update(schema.screenRuns)
-    .set({ status: "running", startedAt: new Date(), error: null })
-    .where(eq(schema.screenRuns.id, existing.id));
-  // Candidates from the failed/stale attempt would otherwise duplicate.
-  await db
-    .delete(schema.screenCandidates)
-    .where(eq(schema.screenCandidates.runId, existing.id));
-
-  return { runId: existing.id, claimed: true };
+  return { runId: existing.id, claimed: false };
 }
 
 async function readExistingRun(

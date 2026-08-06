@@ -16,7 +16,12 @@ const state = {
   storedCandidateRows: [] as Record<string, unknown>[],
   storedIdeaRow: null as Record<string, unknown> | null,
   claimConflicts: false,
+  reclaimClaimed: false,
 };
+
+// Mirrors claimRun's staleness threshold (lib/screen/run.ts) so the mock's
+// reclaim-eligibility check matches what the real WHERE clause would match.
+const STALE_RUNNING_MS = 10 * 60 * 1000;
 
 vi.mock("@/lib/db", () => {
   const isRunsTable = (t: unknown) => t === tables.screenRuns;
@@ -83,7 +88,27 @@ vi.mock("@/lib/db", () => {
         set: (row: Record<string, unknown>) => ({
           where: () => {
             state.updatedRuns.push(row);
-            return Promise.resolve();
+            // Only claimRun's reclaim UPDATE sets status back to "running";
+            // decide win/lose synchronously here (mirroring a real atomic
+            // UPDATE ... RETURNING) so two concurrent reclaims can't both win.
+            let reclaimedRows: { id: number }[] = [];
+            if (row.status === "running" && state.existingRun) {
+              const run = state.existingRun;
+              const isReclaimable =
+                run.status === "failed" ||
+                (run.status === "running" &&
+                  !!run.startedAt &&
+                  Date.now() - run.startedAt.getTime() > STALE_RUNNING_MS);
+              if (isReclaimable && !state.reclaimClaimed) {
+                state.reclaimClaimed = true;
+                reclaimedRows = [{ id: run.id }];
+              }
+            }
+            return {
+              returning: () => Promise.resolve(reclaimedRows),
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve().then(resolve),
+            };
           },
         }),
       }),
@@ -237,6 +262,7 @@ beforeEach(() => {
     storedCandidateRows: [],
     storedIdeaRow: null,
     claimConflicts: false,
+    reclaimClaimed: false,
   });
   vi.clearAllMocks();
 });
@@ -572,5 +598,35 @@ describe("claimRun stale-running reclaim", () => {
 
     expect(result.alreadyRan).toBe(true);
     expect(fetchUniverseCandidates).not.toHaveBeenCalled();
+  });
+});
+
+describe("claimRun atomic reclaim", () => {
+  it("lets only one of two concurrent reclaims win a failed run", async () => {
+    state.claimConflicts = true;
+    state.existingRun = { id: 1, status: "failed", error: "finnhub down" };
+
+    const [a, b] = await Promise.all([
+      claimScreenRun(universe),
+      claimScreenRun(universe),
+    ]);
+
+    expect([a.claimed, b.claimed].filter(Boolean)).toHaveLength(1);
+  });
+
+  it("lets only one of two concurrent reclaims win a stale-running run", async () => {
+    state.claimConflicts = true;
+    state.existingRun = {
+      id: 1,
+      status: "running",
+      startedAt: new Date(Date.now() - 11 * 60 * 1000),
+    };
+
+    const [a, b] = await Promise.all([
+      claimScreenRun(universe),
+      claimScreenRun(universe),
+    ]);
+
+    expect([a.claimed, b.claimed].filter(Boolean)).toHaveLength(1);
   });
 });
