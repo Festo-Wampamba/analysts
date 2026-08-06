@@ -26,13 +26,22 @@ describe("ResearchTickerPage", () => {
         },
       },
       narrative: {
-        thesisPoints: ["Strong margins"],
-        keyCatalyst: "Product cycle",
-        bullCase: "Bull",
-        bearCase: "Bear",
+        overview: "Apple's ecosystem economics remain intact.",
+        businessModel: "Hardware-led with a growing services layer.",
+        financialPerformance: "Revenue growth driven by iPhone and services.",
+        balanceSheet: "Net cash position supports buybacks.",
+        valuation: "Trades in line with its historical multiple.",
+        peers: "Trades at a premium to hardware peers.",
+        recentDevelopments: "Recent product cycle announcements.",
+        growthDrivers: "Services attach rate and installed base growth.",
+        catalysts: "Product cycle",
         risks: ["Competition"],
-        confidenceRationale: "High coverage",
-        scenarios: [],
+        scenarios: [
+          { label: "bull", summary: "Upside case" },
+          { label: "base", summary: "Base case" },
+          { label: "bear", summary: "Downside case" },
+        ],
+        thesis: "Durable ecosystem moat.",
         limitations: [],
       },
       provenance: [
@@ -52,6 +61,7 @@ describe("ResearchTickerPage", () => {
 
     expect(await screen.findByText("Apple Inc")).toBeInTheDocument();
     expect(screen.getByText("+2.00")).toBeInTheDocument();
+    expect(screen.getByText("Product cycle")).toBeInTheDocument();
   });
 
   it("renders a StatusNotice when the ticker is unknown", async () => {

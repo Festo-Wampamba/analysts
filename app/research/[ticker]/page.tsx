@@ -12,8 +12,12 @@ type ApiError = { error: string; message: string };
 
 async function fetchReport(ticker: string): Promise<ResearchReport | ApiError> {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/research/${ticker}`, { cache: "no-store" });
-  return res.json();
+  try {
+    const res = await fetch(`${base}/api/research/${ticker}`, { cache: "no-store" });
+    return await res.json();
+  } catch {
+    return { error: "fetch_failed", message: "Could not reach the research service." };
+  }
 }
 
 export default async function ResearchTickerPage({

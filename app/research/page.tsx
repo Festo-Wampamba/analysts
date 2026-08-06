@@ -26,7 +26,7 @@ export default function ResearchSearch() {
         />
         <button
           type="submit"
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           Search
         </button>

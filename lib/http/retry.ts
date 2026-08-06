@@ -31,6 +31,7 @@ export async function fetchWithRetry(
       }
       return res;
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
       lastError = err;
       if (attempt < retries) {
         await sleep(baseDelayMs * 2 ** attempt);

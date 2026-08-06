@@ -1,6 +1,7 @@
 import { getLatestIdea, type LatestIdea } from "@/lib/screen/get-latest-idea";
 import { Badge } from "@/components/Badge";
 import { GlassPanel } from "@/components/GlassPanel";
+import { StatusNotice } from "@/components/StatusNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -37,15 +38,6 @@ function Topbar({ run }: { run: LatestIdea["run"] }) {
   );
 }
 
-function EmptyState({ title, detail }: { title: string; detail: string }) {
-  return (
-    <GlassPanel className="flex flex-col items-center gap-2 px-8 py-16 text-center">
-      <p className="text-lg font-medium text-ink">{title}</p>
-      <p className="max-w-md text-sm text-ink-subtle">{detail}</p>
-    </GlassPanel>
-  );
-}
-
 function StatRow({ idea }: { idea: LatestIdea }) {
   const stats = [
     { label: "Universe", value: `${idea.run?.universeEvaluated ?? 0} / ${idea.run?.universeSize ?? 0}` },
@@ -73,7 +65,8 @@ function Hero({ idea }: { idea: LatestIdea }) {
   if (!idea.ticker) {
     return (
       <section className="flex flex-col gap-6">
-        <EmptyState
+        <StatusNotice
+          tone="info"
           title="No qualifying idea today"
           detail={`Every candidate scored below the ${idea.threshold.toFixed(4)} threshold on ${formatDate(idea.tradingDate)}. Nothing cleared the bar, so nothing shipped — that's the engine working as designed, not a failure.`}
         />
@@ -220,12 +213,14 @@ export default async function Home() {
       <Topbar run={idea?.run ?? null} />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-6 py-10">
         {dbError ? (
-          <EmptyState
+          <StatusNotice
+            tone="info"
             title="Engine offline"
             detail="Can't reach the database right now. Once it's connected, the day's screening run will show up here automatically."
           />
         ) : !idea ? (
-          <EmptyState
+          <StatusNotice
+            tone="info"
             title="No screen has run yet"
             detail="The daily idea engine runs weekdays at 13:00 UTC and screens a 54-ticker universe across 9 sectors. The first result lands here after the next scheduled run."
           />
