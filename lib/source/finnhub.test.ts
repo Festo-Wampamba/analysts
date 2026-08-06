@@ -150,4 +150,21 @@ describe("getQuote", () => {
     consoleError.mockRestore();
     expect(data).toEqual(validQuote);
   });
+
+  it("retries once on a 503 before succeeding", async () => {
+    const ok = new Response(
+      JSON.stringify({ c: 100, d: 1, dp: 1, h: 101, l: 99, o: 99, pc: 99, t: 1735689600 }),
+      { status: 200 },
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+      .mockResolvedValueOnce(ok);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getQuote("AAPL");
+
+    expect(result.data.c).toBe(100);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

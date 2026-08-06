@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { GeneratedContentMeta } from "@/lib/domain/provenance";
+import { fetchWithRetry } from "@/lib/http/retry";
 import { recordSourceCall } from "@/lib/source/log";
 
 const BASE_URL = "https://api.groq.com/openai/v1";
@@ -88,7 +89,7 @@ export async function groqJson<S extends z.ZodType>(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${ENDPOINT}`, {
+    res = await fetchWithRetry(`${BASE_URL}${ENDPOINT}`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,

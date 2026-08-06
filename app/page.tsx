@@ -1,4 +1,7 @@
 import { getLatestIdea, type LatestIdea } from "@/lib/screen/get-latest-idea";
+import { Badge } from "@/components/Badge";
+import { GlassPanel } from "@/components/GlassPanel";
+import { StatusNotice } from "@/components/StatusNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -9,44 +12,6 @@ function formatDate(iso: string) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function Badge({
-  tone = "neutral",
-  children,
-}: {
-  tone?: "neutral" | "primary" | "success" | "danger";
-  children: React.ReactNode;
-}) {
-  const tones: Record<string, string> = {
-    neutral: "bg-surface-2 text-ink-subtle border-hairline",
-    primary: "bg-primary/10 text-primary border-primary/30",
-    success: "bg-success/10 text-success border-success/30",
-    danger: "bg-danger/10 text-danger border-danger/30",
-  };
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${tones[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function GlassPanel({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-xl border border-hairline bg-surface-1/80 backdrop-blur-sm ${className}`}
-    >
-      {children}
-    </div>
-  );
 }
 
 function Topbar({ run }: { run: LatestIdea["run"] }) {
@@ -70,15 +35,6 @@ function Topbar({ run }: { run: LatestIdea["run"] }) {
         </Badge>
       </div>
     </header>
-  );
-}
-
-function EmptyState({ title, detail }: { title: string; detail: string }) {
-  return (
-    <GlassPanel className="flex flex-col items-center gap-2 px-8 py-16 text-center">
-      <p className="text-lg font-medium text-ink">{title}</p>
-      <p className="max-w-md text-sm text-ink-subtle">{detail}</p>
-    </GlassPanel>
   );
 }
 
@@ -109,7 +65,8 @@ function Hero({ idea }: { idea: LatestIdea }) {
   if (!idea.ticker) {
     return (
       <section className="flex flex-col gap-6">
-        <EmptyState
+        <StatusNotice
+          tone="info"
           title="No qualifying idea today"
           detail={`Every candidate scored below the ${idea.threshold.toFixed(4)} threshold on ${formatDate(idea.tradingDate)}. Nothing cleared the bar, so nothing shipped — that's the engine working as designed, not a failure.`}
         />
@@ -256,12 +213,14 @@ export default async function Home() {
       <Topbar run={idea?.run ?? null} />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-6 py-10">
         {dbError ? (
-          <EmptyState
+          <StatusNotice
+            tone="info"
             title="Engine offline"
             detail="Can't reach the database right now. Once it's connected, the day's screening run will show up here automatically."
           />
         ) : !idea ? (
-          <EmptyState
+          <StatusNotice
+            tone="info"
             title="No screen has run yet"
             detail="The daily idea engine runs weekdays at 13:00 UTC and screens a 54-ticker universe across 9 sectors. The first result lands here after the next scheduled run."
           />

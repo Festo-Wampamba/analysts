@@ -149,4 +149,28 @@ describe("groqJson", () => {
       ],
     });
   });
+
+  it("retries once on a 500 before succeeding", async () => {
+    const completion = {
+      model: "llama-3.3-70b-versatile",
+      choices: [{ message: { content: JSON.stringify({ ok: true }) } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("error", { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(completion), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const outputSchema = z.object({ ok: z.boolean() });
+    const result = await groqJson({
+      system: "s",
+      user: "u",
+      outputSchema,
+      basedOn: ["test"],
+    });
+
+    expect(result.data.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
