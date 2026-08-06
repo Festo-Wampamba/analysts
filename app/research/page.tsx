@@ -22,7 +22,7 @@ export default function ResearchSearch() {
           onChange={(e) => setValue(e.target.value)}
           placeholder="AAPL"
           aria-label="Ticker symbol"
-          className="flex-1 rounded-lg border border-hairline bg-surface-1 px-4 py-2 text-ink outline-none focus:border-primary"
+          className="flex-1 rounded-lg border border-hairline bg-surface-1 px-4 py-2 text-ink outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-primary"
         />
         <button
           type="submit"
