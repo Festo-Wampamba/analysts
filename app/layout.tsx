@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import type { LayoutProps } from "@/lib/types";
 import "./globals.css";
 
 const inter = Inter({

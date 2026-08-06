@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { RouteContext } from "@/lib/types";
 
 import { FinnhubError } from "@/lib/source/finnhub";
 import { GroqError } from "@/lib/ai/groq";
