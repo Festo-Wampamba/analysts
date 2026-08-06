@@ -51,7 +51,7 @@ export default async function ResearchTickerPage({
         {facts.quote && (
           <div className="mt-6 flex items-baseline gap-3">
             <span className="font-mono text-2xl text-ink">${facts.quote.price.toFixed(2)}</span>
-            <DirectionalValue value={facts.quote.change} />
+            <DirectionalValue value={{ ...facts.quote.change, comparisonLabel: undefined }} />
             <DirectionalValue value={facts.quote.changePercent} />
           </div>
         )}
