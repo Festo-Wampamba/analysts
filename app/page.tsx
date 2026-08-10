@@ -136,7 +136,6 @@ function Topbar() {
         <a className="brand-lockup" href="#research" aria-label="Analysts home">
           <span className="brand-mark" aria-hidden="true">A</span>
           <span className="brand-name">Analysts</span>
-          <span className="brand-domain">analysts.korestandard.com</span>
         </a>
         <div className="topbar-paths">
           <a className="nav-path nav-path--active" href="#research"><ChartIcon />Research</a>
