@@ -1,19 +1,31 @@
-# Analysts Daily Idea Engine visual system
+# Analysts research workspace visual system
 
-The `/` screen is a dark, editorial equity-screening readout modeled on the supplied Image #2 reference. It is intentionally narrow and calm: a centered `880px` desktop column, a `56px` top bar, low-contrast graphite surfaces, and one green system accent used only for the complete state and positive price movement.
+The root screen is a long-form equity research workspace based on `Designs/FinalDesing.html` and the supplied Image #5 reference. It is intentionally dark, editorial, and information-dense: a glass navigation shell, a two-column research report with a sticky section index, then a Daily Idea engine workspace below. The static template is the visual contract; backend wiring can replace the values without changing the composition.
 
 ## Tokens
 
-- Page: `#050505`; panel: `#0d0f10`; elevated panel: `#101112`; border: `#242628`.
-- Main text: `#f0f1f2`; secondary: `#a2a5aa`; muted: `#686c72`.
-- Positive/complete: `#00a63c`; positive soft: `rgba(0,166,60,.12)`.
-- Score badge: `#17172a` with indigo text; no decorative gradients.
-- Display: Space Grotesk. Body/UI: IBM Plex Sans. Data: IBM Plex Mono.
-- Shape: `10px`–`12px` panel radius, `6px` row radius, 1px borders.
-- Spacing: 16px base, 22px panel padding, 26px section rhythm.
+- Canvas: `#070a0f`, with a 72px low-contrast grid and blue-gray radial ambient light.
+- Ink: `#f6f8fb`; secondary: `#9ba7b5`; tertiary: `#718079`.
+- Glass surfaces: `rgba(17,22,30,.66)` and `rgba(20,26,35,.84)` with `rgba(193,211,229,.12)` hairlines.
+- Primary accent: steel blue `#9fc4df`; positive: `#22c55e`; negative: `#ef4444`.
+- Display: Space Grotesk. Body/UI: IBM Plex Sans. Data, labels, timestamps: IBM Plex Mono.
+- Shape: 15px cards, 18px navigation and chart surfaces, 26px hero/pick surfaces, pill controls.
+- Shadow: `0 24px 80px rgba(0,0,0,.34)` with a subtle inset top highlight.
 
-## Required structure
+## Information architecture
 
-Topbar → hero pick → four-cell stats row → Thesis / Key catalyst → Bull / Bear → Risks → Ranked candidates → footer.
+Topbar → Research report shell → sticky report navigation → AAPL hero/chart → Overview → Financials → Valuation → Peers → Catalysts → Risks → Bull / Base / Bear → Investment thesis → Sources → Daily Idea engine → qualified CRWD pick → no-idea state → ranked candidates → engine status → footer.
 
-Keep content source-aware, use bullets for thesis/risks, and keep all numeric values tabular. The visual-template phase is static; later backend wiring may replace these values without changing the layout.
+## Component rules
+
+- Provider facts use the search icon and steel-blue eyebrow treatment.
+- Generated narrative uses the sparkle icon and the same steel-blue language; avoid large saturated color rails.
+- Financial changes use green/red only for direction, never as the primary surface treatment.
+- Numbers, prices, scores, timestamps, and API paths use IBM Plex Mono for alignment and provenance.
+- Tables preserve explicit columns on desktop and collapse to readable ticker/catalyst/confidence rows on mobile.
+- The report index becomes a horizontal, scrollable anchor bar below 1023px.
+- Research and Daily Idea are separate anchors in the topbar, but remain one scrollable page until routing/backend wiring is introduced.
+
+## Source of truth
+
+The composition, copy, section order, and responsive intent come from `Designs/FinalDesing.html`. The production React implementation is in `app/page.tsx`; visual tokens and responsive rules are in `app/globals.css`.
