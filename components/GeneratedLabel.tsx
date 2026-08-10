@@ -2,7 +2,7 @@ import type { GeneratedContentMeta } from "@/lib/domain/provenance";
 
 export function GeneratedLabel({ meta }: { meta: GeneratedContentMeta }) {
   return (
-    <p className="text-xs text-ink-tertiary">
+    <p className="text-xs text-ink-subtle">
       Generated{meta.modelLabel ? ` by ${meta.modelLabel}` : ""} · based on{" "}
       {meta.basedOn.length} source{meta.basedOn.length === 1 ? "" : "s"}
     </p>

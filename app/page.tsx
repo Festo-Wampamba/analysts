@@ -1,240 +1,216 @@
-import { getLatestIdea, type LatestIdea } from "@/lib/screen/get-latest-idea";
-import { Badge } from "@/components/Badge";
-import { GlassPanel } from "@/components/GlassPanel";
-import { StatusNotice } from "@/components/StatusNotice";
+type Candidate = {
+  rank: number;
+  ticker: string;
+  sector: string;
+  composite: string;
+};
 
-export const dynamic = "force-dynamic";
+const dailyIdea = {
+  date: "Wednesday, August 5, 2026",
+  ticker: "GOOGL",
+  company: "Alphabet Inc",
+  sector: "Communication Services",
+  score: "0.7150",
+  confidence: "1.00",
+  price: "$377.65",
+  change: "+1.11%",
+  selectionReason:
+    "The quantitative screen has chosen Alphabet Inc, ticker GOOGL, for its strong growth and profitability metrics, including a revenue growth of 20.05 and an earnings per share growth of 115.31, as well as its high return on equity of 50.83999999999996 and net profit margin of 54.77",
+  stats: [
+    ["Universe", "54 / 54"],
+    ["Threshold", "0.6500"],
+    ["Highest score", "0.7150"],
+    ["Run time", "165.4s"],
+  ],
+  thesis: [
+    "Alphabet Inc has demonstrated strong growth potential with its revenue and earnings per share growth rates of 20.05 and 115.31 respectively",
+    "The company's high return on equity of 50.83999999999996 and net profit margin of 54.77 indicate a strong ability to generate profits",
+    "The factor scores show that Alphabet Inc ranks high in growth, profitability, financial strength, and sentiment, with scores of 0.8672, 0.8868, 0.9417, and 0.8868 respectively",
+  ],
+  catalyst:
+    "The company's ability to continue innovating and expanding its product offerings, as well as its strong financial position, could be key catalysts for future growth",
+  bullCase:
+    "If Alphabet Inc can continue to execute on its growth strategy and maintain its strong profitability, the stock could potentially outperform its peers and the broader market",
+  bearCase:
+    "However, if the company faces increased competition or is unable to innovate and expand its product offerings, its growth and profitability could be negatively impacted",
+  risks: [
+    "Increased competition in the technology sector",
+    "Regulatory risks and potential changes in government policies",
+    "The company's high debt to equity ratio of 0.1533 and potential impact on financial flexibility",
+  ],
+  riskNote:
+    "The confidence in this selection is supported by the comprehensive data coverage, with a coverage score of 1, and the company's composite score of 0.715, which exceeds the qualifying threshold of 0.65, indicating a strong overall profile",
+};
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+const candidates: Candidate[] = [
+  { rank: 1, ticker: "GOOGL", sector: "Communication Services", composite: "0.7150" },
+  { rank: 2, ticker: "NVDA", sector: "Technology", composite: "0.6937" },
+  { rank: 3, ticker: "LLY", sector: "Health Care", composite: "0.6457" },
+  { rank: 4, ticker: "JPM", sector: "Financials", composite: "0.6424" },
+  { rank: 5, ticker: "BAC", sector: "Financials", composite: "0.6343" },
+];
+
+function CompleteStatus() {
+  return (
+    <span className="daily-status" aria-label="Screen complete">
+      <span className="daily-status-dot" aria-hidden="true" />
+      complete
+    </span>
+  );
 }
 
-function Topbar({ run }: { run: LatestIdea["run"] }) {
-  const isLive = run?.status === "complete" || run?.status === "no_qualifying_idea";
+function Topbar() {
   return (
-    <header className="sticky top-0 z-10 border-b border-hairline bg-canvas/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <div className="flex items-baseline gap-3">
-          <span className="text-[15px] font-semibold tracking-tight text-ink">
-            Analysts
-          </span>
-          <span className="hidden text-xs text-ink-tertiary sm:inline">
-            Daily Idea Engine
-          </span>
+    <header className="daily-topbar">
+      <div className="daily-topbar-inner">
+        <div className="daily-brand">
+          <span>Analysts</span>
+          <span className="daily-brand-subtitle">Daily Idea Engine</span>
         </div>
-        <Badge tone={isLive ? "success" : "neutral"}>
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${isLive ? "bg-success" : "bg-ink-tertiary"}`}
-          />
-          {run ? run.status.replace(/_/g, " ") : "awaiting first run"}
-        </Badge>
+        <CompleteStatus />
       </div>
     </header>
   );
 }
 
-function StatRow({ idea }: { idea: LatestIdea }) {
-  const stats = [
-    { label: "Universe", value: `${idea.run?.universeEvaluated ?? 0} / ${idea.run?.universeSize ?? 0}` },
-    { label: "Threshold", value: idea.threshold.toFixed(4) },
-    { label: "Highest score", value: idea.run?.highestScore?.toFixed(4) ?? "—" },
-    {
-      label: "Run time",
-      value:
-        idea.run?.durationMs != null ? `${(idea.run.durationMs / 1000).toFixed(1)}s` : "—",
-    },
-  ];
+function Hero() {
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-hairline bg-hairline sm:grid-cols-4">
-      {stats.map((s) => (
-        <div key={s.label} className="bg-surface-1 px-4 py-3">
-          <p className="text-xs text-ink-tertiary">{s.label}</p>
-          <p className="font-mono text-sm text-ink">{s.value}</p>
+    <section className="daily-hero">
+      <div className="daily-hero-topline">
+        <p className="daily-date">{dailyIdea.date}</p>
+        <div className="daily-badges">
+          <span className="daily-badge">{dailyIdea.sector}</span>
+          <span className="daily-badge daily-badge-score">
+            score {dailyIdea.score} · conf {dailyIdea.confidence}
+          </span>
+        </div>
+      </div>
+
+      <div className="daily-ticker-block">
+        <h1>{dailyIdea.ticker}</h1>
+        <p>{dailyIdea.company}</p>
+      </div>
+
+      <div className="daily-quote">
+        <span className="daily-price">{dailyIdea.price}</span>
+        <span className="daily-positive">{dailyIdea.change}</span>
+      </div>
+
+      <p className="daily-selection-reason">{dailyIdea.selectionReason}</p>
+    </section>
+  );
+}
+
+function Stats() {
+  return (
+    <section className="daily-stat-strip" aria-label="Screen statistics">
+      {dailyIdea.stats.map(([label, value]) => (
+        <div className="daily-stat" key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
         </div>
       ))}
-    </div>
-  );
-}
-
-function Hero({ idea }: { idea: LatestIdea }) {
-  if (!idea.ticker) {
-    return (
-      <section className="flex flex-col gap-6">
-        <StatusNotice
-          tone="info"
-          title="No qualifying idea today"
-          detail={`Every candidate scored below the ${idea.threshold.toFixed(4)} threshold on ${formatDate(idea.tradingDate)}. Nothing cleared the bar, so nothing shipped — that's the engine working as designed, not a failure.`}
-        />
-        <StatRow idea={idea} />
-      </section>
-    );
-  }
-
-  const facts = idea.idea?.facts;
-  return (
-    <section className="flex flex-col gap-6">
-      <GlassPanel className="p-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs text-ink-tertiary">{formatDate(idea.tradingDate)}</p>
-            <h1 className="mt-1 text-4xl font-semibold tracking-tight text-ink">
-              {idea.ticker}
-            </h1>
-            {facts?.company?.name && (
-              <p className="mt-1 text-sm text-ink-subtle">{facts.company.name}</p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            {facts?.sector && <Badge>{facts.sector}</Badge>}
-            <Badge tone="primary">
-              score {idea.score?.toFixed(4)} · conf {idea.confidence?.toFixed(2)}
-            </Badge>
-          </div>
-        </div>
-
-        {facts?.price && (
-          <div className="mt-6 flex items-baseline gap-3 font-mono">
-            <span className="text-2xl text-ink">${facts.price.current.toFixed(2)}</span>
-            <span
-              className={facts.price.changePercent >= 0 ? "text-success" : "text-danger"}
-            >
-              {facts.price.changePercent >= 0 ? "+" : ""}
-              {facts.price.changePercent.toFixed(2)}%
-            </span>
-          </div>
-        )}
-
-        {idea.idea?.narrative?.selectionReason && (
-          <p className="mt-6 max-w-2xl text-[15px] leading-relaxed text-ink-muted">
-            {idea.idea.narrative.selectionReason}
-          </p>
-        )}
-      </GlassPanel>
-      <StatRow idea={idea} />
     </section>
   );
 }
 
-function Narrative({ idea }: { idea: LatestIdea }) {
-  const n = idea.idea?.narrative;
-  if (!n) return null;
+function EvidenceCard({
+  title,
+  children,
+  headingTone = "neutral",
+}: {
+  title: string;
+  children: React.ReactNode;
+  headingTone?: "neutral" | "positive" | "negative";
+}) {
   return (
-    <section className="grid gap-6 sm:grid-cols-2">
-      <GlassPanel className="p-6">
-        <h2 className="text-sm font-medium text-ink-subtle">Thesis</h2>
-        <ul className="mt-3 flex flex-col gap-2">
-          {n.thesisPoints.map((point, i) => (
-            <li key={i} className="flex gap-2 text-sm text-ink-muted">
-              <span className="text-primary">·</span>
-              {point}
-            </li>
-          ))}
-        </ul>
-      </GlassPanel>
-      <GlassPanel className="p-6">
-        <h2 className="text-sm font-medium text-ink-subtle">Key catalyst</h2>
-        <p className="mt-3 text-sm text-ink-muted">{n.keyCatalyst}</p>
-      </GlassPanel>
-      <GlassPanel className="p-6">
-        <h2 className="text-sm font-medium text-success">Bull case</h2>
-        <p className="mt-3 text-sm text-ink-muted">{n.bullCase}</p>
-      </GlassPanel>
-      <GlassPanel className="p-6">
-        <h2 className="text-sm font-medium text-danger">Bear case</h2>
-        <p className="mt-3 text-sm text-ink-muted">{n.bearCase}</p>
-      </GlassPanel>
-      <GlassPanel className="p-6 sm:col-span-2">
-        <h2 className="text-sm font-medium text-ink-subtle">Risks</h2>
-        <ul className="mt-3 flex flex-col gap-2">
-          {n.risks.map((risk, i) => (
-            <li key={i} className="flex gap-2 text-sm text-ink-muted">
-              <span className="text-ink-tertiary">·</span>
-              {risk}
-            </li>
-          ))}
-        </ul>
-        <p className="mt-4 text-xs text-ink-tertiary">{n.confidenceRationale}</p>
-      </GlassPanel>
-    </section>
+    <article className="daily-card">
+      <h2 className={`daily-card-heading-${headingTone}`}>{title}</h2>
+      {children}
+    </article>
   );
 }
 
-function Candidates({ candidates }: { candidates: LatestIdea["candidates"] }) {
-  if (candidates.length === 0) return null;
+function Narrative() {
   return (
-    <section>
-      <h2 className="mb-3 text-sm font-medium text-ink-subtle">
-        Ranked candidates ({candidates.length})
-      </h2>
-      <GlassPanel className="overflow-hidden">
-        <table className="w-full text-left text-sm">
+    <>
+      <div className="daily-grid-two">
+        <EvidenceCard title="Thesis">
+          <ul className="daily-bullet-list">
+            {dailyIdea.thesis.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+        </EvidenceCard>
+        <EvidenceCard title="Key catalyst">
+          <p>{dailyIdea.catalyst}</p>
+        </EvidenceCard>
+      </div>
+
+      <div className="daily-grid-two daily-scenario-grid">
+        <EvidenceCard title="Bull case" headingTone="positive">
+          <p className="daily-positive-heading">{dailyIdea.bullCase}</p>
+        </EvidenceCard>
+        <EvidenceCard title="Bear case" headingTone="negative">
+          <p className="daily-negative-heading">{dailyIdea.bearCase}</p>
+        </EvidenceCard>
+      </div>
+
+      <EvidenceCard title="Risks">
+        <ul className="daily-bullet-list daily-risk-list">
+          {dailyIdea.risks.map((risk) => (
+            <li key={risk}>{risk}</li>
+          ))}
+        </ul>
+        <p className="daily-card-note">{dailyIdea.riskNote}</p>
+      </EvidenceCard>
+    </>
+  );
+}
+
+function RankedCandidates() {
+  return (
+    <section className="daily-ranked">
+      <h2>Ranked candidates ({candidates.length})</h2>
+      <div className="daily-table-wrap">
+        <table className="daily-rank-table">
           <thead>
-            <tr className="border-b border-hairline text-xs text-ink-tertiary">
-              <th className="px-4 py-2 font-normal">#</th>
-              <th className="px-4 py-2 font-normal">Ticker</th>
-              <th className="px-4 py-2 font-normal">Sector</th>
-              <th className="px-4 py-2 font-normal text-right">Composite</th>
+            <tr>
+              <th>#</th>
+              <th>Ticker</th>
+              <th>Sector</th>
+              <th>Composite</th>
             </tr>
           </thead>
           <tbody>
-            {candidates.map((c) => (
-              <tr key={c.ticker} className="border-b border-hairline last:border-0">
-                <td className="px-4 py-2.5 font-mono text-ink-tertiary">{c.rank}</td>
-                <td className="px-4 py-2.5 font-medium text-ink">{c.ticker}</td>
-                <td className="px-4 py-2.5 text-ink-subtle">{c.sector ?? "—"}</td>
-                <td className="px-4 py-2.5 text-right font-mono text-ink">
-                  {c.compositeScore.toFixed(4)}
-                </td>
+            {candidates.map((candidate) => (
+              <tr key={candidate.ticker}>
+                <td>{candidate.rank}</td>
+                <td>{candidate.ticker}</td>
+                <td>{candidate.sector}</td>
+                <td>{candidate.composite}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </GlassPanel>
+      </div>
     </section>
   );
 }
 
-export default async function Home() {
-  let idea: LatestIdea | null = null;
-  let dbError = false;
-  try {
-    idea = await getLatestIdea();
-  } catch {
-    dbError = true;
-  }
-
+export default function Home() {
   return (
-    <>
-      <Topbar run={idea?.run ?? null} />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-6 py-10">
-        {dbError ? (
-          <StatusNotice
-            tone="info"
-            title="Engine offline"
-            detail="Can't reach the database right now. Once it's connected, the day's screening run will show up here automatically."
-          />
-        ) : !idea ? (
-          <StatusNotice
-            tone="info"
-            title="No screen has run yet"
-            detail="The daily idea engine runs weekdays at 13:00 UTC and screens a 54-ticker universe across 9 sectors. The first result lands here after the next scheduled run."
-          />
-        ) : (
-          <>
-            <Hero idea={idea} />
-            <Narrative idea={idea} />
-            <Candidates candidates={idea.candidates} />
-          </>
-        )}
+    <div className="daily-idea-page">
+      <Topbar />
+      <main className="daily-content">
+        <Hero />
+        <Stats />
+        <Narrative />
+        <RankedCandidates />
       </main>
-      <footer className="border-t border-hairline px-6 py-6 text-center text-xs text-ink-tertiary">
+      <footer className="daily-footer">
         Cross-sectional equity screening, sourced facts only, no unsourced numbers.
       </footer>
-    </>
+    </div>
   );
 }

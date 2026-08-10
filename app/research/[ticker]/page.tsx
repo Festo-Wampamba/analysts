@@ -40,7 +40,7 @@ export default async function ResearchTickerPage({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-10">
-      <GlassPanel className="p-8">
+      <GlassPanel tone="hero" className="p-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight text-ink">{facts.ticker}</h1>

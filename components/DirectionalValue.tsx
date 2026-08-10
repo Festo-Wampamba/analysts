@@ -17,7 +17,7 @@ export function DirectionalValue({
     <span className={`font-mono ${toneClass} ${className}`}>
       {value.formatted}
       {value.comparisonLabel && (
-        <span className="ml-1.5 text-xs text-ink-tertiary">{value.comparisonLabel}</span>
+        <span className="ml-1.5 text-xs text-ink-subtle">{value.comparisonLabel}</span>
       )}
     </span>
   );

@@ -1,46 +1,617 @@
 @import "tailwindcss";
 
+/* Tokens are transcribed from Final-design.md §3.3, §5.2, and §6.1. That
+   spec is canonical for this project — do not substitute a house palette. */
 :root {
-  --canvas: #010102;
-  --surface-1: #0f1011;
-  --surface-2: #141516;
-  --surface-3: #18191a;
-  --hairline: #23252a;
-  --hairline-strong: #34343a;
-  --ink: #f7f8f8;
-  --ink-muted: #d0d6e0;
-  --ink-subtle: #8a8f98;
-  --ink-tertiary: #787c85;
-  --primary: #5e6ad2;
-  --primary-hover: #828fff;
-  --on-primary: #ffffff;
-  --success: #27a644;
-  --danger: #e5484d;
+  --canvas: #070a0f;
+  --canvas-deep: #05070b;
+
+  --ink: #f6f8fb;
+  --ink-soft: #e7f1f8;
+  --muted: #9ba7b5;
+  --muted-low: #718079;
+
+  --accent: #9fc4df;
+  --accent-strong: #8fb8d8;
+  --accent-hover: #b7d5e9;
+  --accent-soft: rgba(143, 184, 216, 0.105);
+  --accent-tint: rgba(159, 196, 223, 0.055);
+
+  --positive: #22c55e;
+  --positive-soft: rgba(34, 197, 94, 0.12);
+  --negative: #ef4444;
+  --negative-soft: rgba(239, 68, 68, 0.1);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.1);
+
+  --surface-glass: rgba(17, 22, 30, 0.66);
+  --surface-glass-strong: rgba(20, 26, 35, 0.84);
+  --surface-hover: rgba(255, 255, 255, 0.045);
+  --surface-selected: rgba(255, 255, 255, 0.065);
+  --border-default: rgba(193, 211, 229, 0.12);
+  --border-strong: rgba(193, 211, 229, 0.21);
+
+  --shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.34),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-floating: 0 14px 46px rgba(0, 0, 0, 0.28),
+                     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 @theme inline {
   --color-canvas: var(--canvas);
-  --color-surface-1: var(--surface-1);
-  --color-surface-2: var(--surface-2);
-  --color-surface-3: var(--surface-3);
-  --color-hairline: var(--hairline);
-  --color-hairline-strong: var(--hairline-strong);
+  --color-canvas-deep: var(--canvas-deep);
+
+  /* Legacy surface-N / hairline / ink-* names are kept as the spec-value
+     aliases the existing components already reference. */
+  --color-surface-1: var(--surface-glass);
+  --color-surface-2: var(--surface-glass-strong);
+  --color-surface-3: var(--surface-selected);
+  --color-surface-hover: var(--surface-hover);
+  --color-hairline: var(--border-default);
+  --color-hairline-strong: var(--border-strong);
+
   --color-ink: var(--ink);
-  --color-ink-muted: var(--ink-muted);
-  --color-ink-subtle: var(--ink-subtle);
-  --color-ink-tertiary: var(--ink-tertiary);
-  --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-hover);
-  --color-on-primary: var(--on-primary);
-  --color-success: var(--success);
-  --color-danger: var(--danger);
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-jetbrains-mono);
+  --color-ink-muted: var(--ink-soft);
+  --color-ink-subtle: var(--muted);
+  --color-ink-tertiary: var(--muted-low);
+
+  --color-primary: var(--accent);
+  --color-primary-hover: var(--accent-hover);
+  --color-primary-strong: var(--accent-strong);
+  --color-primary-soft: var(--accent-soft);
+  --color-primary-tint: var(--accent-tint);
+  /* The accent is a light steel blue; white on it is ~1.9:1. Text sitting on
+     a filled accent surface must be canvas-dark to clear 4.5:1. */
+  --color-on-primary: var(--canvas);
+
+  --color-success: var(--positive);
+  --color-success-soft: var(--positive-soft);
+  --color-danger: var(--negative);
+  --color-danger-soft: var(--negative-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-hero: 26px;
+
+  --shadow-panel: var(--shadow-panel);
+  --shadow-floating: var(--shadow-floating);
+
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-ibm-plex-sans);
+  --font-mono: var(--font-ibm-plex-mono);
 }
 
 body {
   background: var(--canvas);
   color: var(--ink);
+}
+
+/* Image #2 reference template: the Daily Idea screen intentionally uses a
+   quieter near-black surface and a narrower editorial reading column than the
+   research report. */
+.daily-idea-page {
+  --daily-bg: #050505;
+  --daily-panel: #0d0f10;
+  --daily-panel-raised: #101112;
+  --daily-border: #242628;
+  --daily-border-soft: #1b1d1f;
+  --daily-text: #f0f1f2;
+  --daily-copy: #b4b7bb;
+  --daily-muted: #777b81;
+  --daily-positive: #00a63c;
+  --daily-positive-soft: rgba(0, 166, 60, 0.12);
+  --daily-score-bg: #151525;
+  --daily-score-text: #7777d9;
+  min-height: 100dvh;
+  background: var(--daily-bg);
+  color: var(--daily-text);
+  font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
+}
+
+.daily-topbar {
+  height: 53px;
+  border-bottom: 1px solid var(--daily-border-soft);
+  background: var(--daily-bg);
+}
+
+.daily-topbar-inner {
+  width: min(100% - 32px, 880px);
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.daily-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.daily-brand-subtitle {
+  color: var(--daily-muted);
+  font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.daily-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid rgba(0, 166, 60, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 166, 60, 0.08);
+  color: var(--daily-positive);
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.daily-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--daily-positive);
+  box-shadow: 0 0 0 3px rgba(0, 166, 60, 0.08);
+}
+
+.daily-content {
+  width: min(100% - 32px, 880px);
+  margin: 0 auto;
+  padding: 36px 0 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.daily-hero,
+.daily-card,
+.daily-table-wrap {
+  border: 1px solid var(--daily-border);
+  border-radius: 10px;
+  background: var(--daily-panel);
+}
+
+.daily-hero {
+  height: 293px;
+  padding: 29px;
+}
+
+.daily-hero-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.daily-date {
+  margin: 0;
+  color: var(--daily-muted);
+  font-size: 13px;
+}
+
+.daily-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.daily-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 4px 10px;
+  border: 1px solid var(--daily-border);
+  border-radius: 999px;
+  background: #151617;
+  color: var(--daily-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.daily-badge-score {
+  border-color: #28284f;
+  background: var(--daily-score-bg);
+  color: var(--daily-score-text);
+}
+
+.daily-ticker-block {
+  margin-top: -8px;
+}
+
+.daily-ticker-block h1 {
+  margin: 0;
+  color: var(--daily-text);
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+}
+
+.daily-ticker-block p {
+  margin: 3px 0 0;
+  color: var(--daily-muted);
+  font-size: 17px;
+}
+
+.daily-quote {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+
+.daily-price {
+  color: var(--daily-text);
+  font-size: 25px;
+  letter-spacing: 0.01em;
+}
+
+.daily-positive {
+  color: var(--daily-positive);
+  font-size: 16px;
+}
+
+.daily-selection-reason {
+  max-width: 620px;
+  margin: 18px 0 0;
+  color: var(--daily-copy);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.daily-stat-strip {
+  height: 56px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--daily-border);
+  border-radius: 8px;
+  background: var(--daily-border);
+}
+
+.daily-stat {
+  min-height: 0;
+  padding: 10px 14px;
+  background: var(--daily-panel);
+}
+
+.daily-stat + .daily-stat {
+  border-left: 1px solid var(--daily-border);
+}
+
+.daily-stat span,
+.daily-stat strong {
+  display: block;
+}
+
+.daily-stat span {
+  color: var(--daily-muted);
+  font-size: 12px;
+}
+
+.daily-stat strong {
+  margin-top: 2px;
+  color: var(--daily-text);
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.daily-grid-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.daily-stat-strip + .daily-grid-two {
+  margin-top: 15px;
+}
+
+.daily-card {
+  min-height: 0;
+  padding: 22px;
+}
+
+.daily-grid-two:first-of-type .daily-card {
+  height: 250px;
+  min-height: 250px;
+  overflow: hidden;
+}
+
+.daily-card h2,
+.daily-ranked h2 {
+  margin: 0;
+  color: var(--daily-copy);
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.daily-card-heading-positive {
+  color: var(--daily-positive) !important;
+}
+
+.daily-card-heading-negative {
+  color: #f04444 !important;
+}
+
+.daily-card p,
+.daily-bullet-list {
+  margin: 18px 0 0;
+  color: var(--daily-copy);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.daily-bullet-list {
+  padding-left: 11px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  list-style: none;
+}
+
+.daily-bullet-list li {
+  position: relative;
+}
+
+.daily-bullet-list li::before {
+  position: absolute;
+  left: -10px;
+  color: #7d8085;
+  content: "·";
+}
+
+.daily-bullet-list li + li {
+  margin-top: 9px;
+}
+
+.daily-positive-heading,
+.daily-negative-heading {
+  color: var(--daily-copy) !important;
+}
+
+.daily-scenario-grid .daily-card {
+  height: 128px;
+  min-height: 128px;
+  overflow: hidden;
+  padding: 19px 22px;
+}
+
+.daily-scenario-grid .daily-card p {
+  margin-top: 16px;
+}
+
+.daily-risk-list {
+  margin-top: 17px;
+}
+
+.daily-risk-list li + li {
+  margin-top: 9px;
+}
+
+.daily-card-note {
+  margin-top: 17px !important;
+  color: var(--daily-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+
+.daily-content > .daily-card {
+  height: 185px;
+  overflow: hidden;
+  padding: 20px 22px;
+}
+
+.daily-content > .daily-card .daily-risk-list {
+  margin-top: 15px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.daily-content > .daily-card .daily-card-note {
+  margin-top: 14px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.daily-ranked {
+  margin-top: 13px;
+}
+
+.daily-ranked > h2 {
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.daily-table-wrap {
+  overflow: hidden;
+}
+
+.daily-rank-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--daily-copy);
+  font-size: 14px;
+}
+
+.daily-rank-table th,
+.daily-rank-table td {
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--daily-border-soft);
+  text-align: left;
+}
+
+.daily-rank-table th {
+  color: var(--daily-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.daily-rank-table td:first-child {
+  width: 10%;
+  color: var(--daily-muted);
+}
+
+.daily-rank-table td:nth-child(2) {
+  width: 20%;
+  color: var(--daily-text);
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+
+.daily-rank-table td:nth-child(3) {
+  width: 45%;
+}
+
+.daily-rank-table th:last-child,
+.daily-rank-table td:last-child {
+  width: 25%;
+  text-align: right;
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+
+.daily-rank-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.daily-rank-table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.daily-rank-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.daily-footer {
+  padding: 28px 16px 35px;
+  border-top: 1px solid var(--daily-border-soft);
+  color: #676b70;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .daily-topbar-inner,
+  .daily-content {
+    width: min(100% - 32px, 520px);
+  }
+
+  .daily-content {
+    padding-top: 26px;
+  }
+
+  .daily-hero {
+    height: auto;
+    padding: 22px 20px;
+  }
+
+  .daily-hero-topline {
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  .daily-badges {
+    justify-content: flex-start;
+  }
+
+  .daily-selection-reason {
+    font-size: 14px;
+  }
+
+  .daily-stat-strip,
+  .daily-grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-stat + .daily-stat {
+    border-top: 1px solid var(--daily-border);
+    border-left: 0;
+  }
+
+  .daily-grid-two:first-of-type .daily-card,
+  .daily-scenario-grid .daily-card {
+    height: auto;
+    min-height: 0;
+  }
+
+  .daily-content > .daily-card {
+    height: auto;
+  }
+
+  .daily-rank-table th,
+  .daily-rank-table td {
+    padding: 10px;
+  }
+
+  .daily-rank-table th:nth-child(3),
+  .daily-rank-table td:nth-child(3) {
+    display: none;
+  }
+
+  .daily-rank-table td:nth-child(2) {
+    width: 45%;
+  }
+
+  .daily-rank-table th:last-child,
+  .daily-rank-table td:last-child {
+    width: 45%;
+  }
+}
+
+/* §4.1/§4.3: headings are display-family with slight negative tracking. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* §4.3: financial values stay tabular even when the fallback font is active. */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* §6.3 ambient background: two low-contrast steel-blue lights over a 72px
+   grid, fading out toward the bottom of the page. Pseudo-elements keep this
+   decorative layer out of the accessibility tree entirely. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+body::before {
+  background:
+    radial-gradient(60rem 40rem at 18% -10%, rgba(143, 184, 216, 0.07), transparent 60%),
+    radial-gradient(50rem 36rem at 88% 4%, rgba(159, 196, 223, 0.05), transparent 62%);
+}
+
+body::after {
+  background-image:
+    linear-gradient(to right, rgba(193, 211, 229, 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(193, 211, 229, 0.022) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 62%);
+  mask-image: linear-gradient(to bottom, black 0%, transparent 62%);
 }
 
 @media (prefers-reduced-motion: reduce) {
