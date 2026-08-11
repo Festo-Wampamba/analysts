@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { currentTradingDate, isBusinessDay, toEasternDate } from "./trading-date";
+import {
+  currentTradingDate,
+  isBusinessDay,
+  toEasternDate,
+  tradingDateWithHolidays,
+} from "./trading-date";
 
 describe("toEasternDate", () => {
   it("formats an instant as the US Eastern calendar date", () => {
@@ -42,5 +47,15 @@ describe("currentTradingDate", () => {
 
   it("files a late-evening Eastern instant under that Eastern date, not the UTC one", () => {
     expect(currentTradingDate(new Date("2026-08-06T02:30:00Z"))).toBe("2026-08-05");
+  });
+});
+
+describe("tradingDateWithHolidays", () => {
+  it("rolls a US market holiday back to the preceding trading day", () => {
+    const result = tradingDateWithHolidays(
+      new Date("2026-09-07T14:00:00Z"),
+      new Set(["2026-09-07"]),
+    );
+    expect(result).toBe("2026-09-04");
   });
 });

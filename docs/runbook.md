@@ -45,10 +45,10 @@ trigger.
 curl https://analysts.korestandard.com/api/health
 ```
 
-No auth required. Returns `{"status":"ok","db":"reachable","build":...}`
-with `200`, or `{"status":"error","db":"unreachable",...}` with `503` if the
-app can't reach Postgres. `build` currently always reads `"unknown"` — see
-`docs/deploy.md`, "Outstanding".
+No auth required. Returns database/build state, boolean provider readiness,
+and the latest screen date/status. A reachable service can report
+`status: "degraded"` when the screen is stale or the latest attempt failed;
+database failure still returns `503`.
 
 ## Stale-running reclaim
 
@@ -70,8 +70,9 @@ Postgres rather than waiting out the full 10 minutes.
 
 1. `GET /api/screen` and read the `runError` field — it's the caught error's
    `message`, e.g. `"unable to evaluate any of 54 universe tickers"` (every
-   Finnhub call failed) or a Groq/schema validation failure surfaced as a
-   `ScreenError`.
+   Finnhub call failed). A model numeric-verification failure now publishes a
+   labelled deterministic fallback, so it no longer fails an otherwise valid
+   screen.
 2. Query the `source_calls` table for the failing run to see which provider
    and endpoint actually failed, and why:
 

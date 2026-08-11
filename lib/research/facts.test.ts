@@ -61,6 +61,7 @@ const sources: RawResearchSources = {
       source: "Reuters",
       summary: "s",
       url: "https://example.com/a",
+      related: "AAPL",
     },
   ],
   recommendations: [

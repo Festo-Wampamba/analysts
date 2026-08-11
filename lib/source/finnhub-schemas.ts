@@ -98,3 +98,33 @@ export const recommendationsSchema = z.array(
   }),
 );
 export type Recommendations = z.infer<typeof recommendationsSchema>;
+
+export const earningsCalendarSchema = z.object({
+  earningsCalendar: z.array(
+    z.object({
+      date: z.string(),
+      epsActual: z.number().nullable().optional(),
+      epsEstimate: z.number().nullable().optional(),
+      hour: z.string().optional(),
+      quarter: z.number().optional(),
+      revenueActual: z.number().nullable().optional(),
+      revenueEstimate: z.number().nullable().optional(),
+      symbol: z.string(),
+      year: z.number().optional(),
+    }),
+  ),
+});
+export type EarningsCalendar = z.infer<typeof earningsCalendarSchema>;
+
+export const marketHolidaySchema = z.object({
+  data: z.array(
+    z.object({
+      eventName: z.string(),
+      atDate: z.string(),
+      tradingHour: z.string().optional(),
+    }),
+  ),
+  exchange: z.string(),
+  timezone: z.string(),
+});
+export type MarketHoliday = z.infer<typeof marketHolidaySchema>;

@@ -28,6 +28,19 @@ Confirmed firing in this session for both branches (see the "test:" commits
 in git history) — Docker build succeeds, app container comes up on port
 3000, Traefik routes exist for both services.
 
+## Required migration and provider configuration
+
+Before deploying the live research workspace, run `pnpm db:migrate` against
+each target database. Migration `0001_bent_bloodscream.sql` adds durable
+provider caches, research-run audit rows, and source-call linkage. It is
+additive and does not alter or delete existing screen results or report
+cache rows.
+
+Set `SEC_USER_AGENT` in Dokploy to an identifying application/contact value.
+Set `ALPHA_VANTAGE_API_KEY` to enable charts; without it, the chart renders an
+explicit unavailable state while the rest of the report remains available.
+Keep `ALPHA_VANTAGE_DAILY_BUDGET=20` unless the provider plan changes.
+
 ## Known trade-off: Bot Fight Mode disabled zone-wide
 
 As of this session, Cloudflare's basic **Bot Fight Mode is disabled
@@ -64,13 +77,10 @@ From `DEPLOY-HANDOFF.md`'s own "still outstanding" list, plus this session:
   because nothing sets it. Fix is passing `--build-arg
   BUILD_SHA=$(git rev-parse HEAD)` in Dokploy's build configuration — a
   dashboard change, not a repo change.
-- **No Postgres service confirmed wired in either environment** per
-  `DEPLOY-HANDOFF.md` at time of writing — verify `DATABASE_URL` is set and
-  `/api/health` returns `db: "reachable"` in both production and dev before
-  trusting either as fully live.
-- **Production Provider config unverified** — confirm the production
-  Dokploy service has branch `main` set and saved (dev's config is
-  confirmed correct).
+- **Production Postgres is verified; development is not.** Production
+  `/api/health` returned `db: "reachable"` on 2026-08-10. The development
+  hostname did not resolve during the same audit, so its database and provider
+  configuration still need verification after DNS is restored.
 - **Orphaned Neon project cleanup** (`floral-morning-80776988`) — blocked
   until the production database mismatch referenced in `DEPLOY-HANDOFF.md`
   is resolved; do not delete until then.

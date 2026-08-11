@@ -16,4 +16,6 @@ export type GeneratedContentMeta = {
   basedOn: string[]; // source block identifiers
   modelLabel?: string;
   limitations?: string[];
+  /** Whether prose came from the model or the deterministic safety fallback. */
+  status?: "generated" | "fallback";
 };

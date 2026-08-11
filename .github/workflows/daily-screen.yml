@@ -17,6 +17,9 @@ jobs:
           response=$(mktemp)
           status=$(curl -sS -o "$response" -w '%{http_code}' \
             --max-time 30 \
+            --retry 4 \
+            --retry-all-errors \
+            --retry-delay 5 \
             -X POST "${SCREEN_URL}" \
             -H "authorization: Bearer ${CRON_SECRET}")
 
@@ -36,11 +39,14 @@ jobs:
       # instead of holding one long connection, which is what the 524 was.
       - name: Poll for completion
         run: |
-          deadline=$((SECONDS + 300))
+          deadline=$((SECONDS + 600))
           while [ "$SECONDS" -lt "$deadline" ]; do
             response=$(mktemp)
             status=$(curl -sS -o "$response" -w '%{http_code}' \
               --max-time 15 \
+              --retry 2 \
+              --retry-all-errors \
+              --retry-delay 3 \
               "${SCREEN_URL}" \
               -H "authorization: Bearer ${CRON_SECRET}")
 
@@ -69,7 +75,7 @@ jobs:
             fi
           done
 
-          echo "::error::screen did not complete within 5 minutes of polling"
+          echo "::error::screen did not complete within 10 minutes of polling"
           exit 1
         env:
           SCREEN_URL: ${{ secrets.SCREEN_URL }}

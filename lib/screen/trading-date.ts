@@ -1,7 +1,6 @@
 // The screen is keyed by US trading date, not by the server's local date —
 // the VPS runs in Europe/Paris and would roll over hours before the US close.
-// Holidays are not modelled: a run on a US market holiday produces a normal
-// (stale-priced) result rather than being skipped. Documented as a limitation.
+import { getCachedMarketHolidays } from "@/lib/source/finnhub-cached";
 
 const NEW_YORK = "America/New_York";
 
@@ -35,4 +34,30 @@ export function currentTradingDate(instant: Date = new Date()): string {
     cursor.setUTCDate(cursor.getUTCDate() - 1);
   }
   return toEasternDate(cursor);
+}
+
+export function tradingDateWithHolidays(
+  instant: Date,
+  holidayDates: ReadonlySet<string>,
+): string {
+  const cursor = new Date(instant);
+  for (;;) {
+    const date = currentTradingDate(cursor);
+    if (!holidayDates.has(date)) return date;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+}
+
+export async function resolveTradingDate(instant: Date = new Date()): Promise<string> {
+  if (!process.env.FINNHUB_API_KEY) return currentTradingDate(instant);
+  try {
+    const holidays = await getCachedMarketHolidays("US");
+    return tradingDateWithHolidays(
+      instant,
+      new Set(holidays.data.data.map((holiday) => holiday.atDate)),
+    );
+  } catch (error) {
+    console.error("market holiday lookup failed; using weekday calendar:", (error as Error).message);
+    return currentTradingDate(instant);
+  }
 }

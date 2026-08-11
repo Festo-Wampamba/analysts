@@ -106,3 +106,14 @@ export function sanitizeSourceText(text: string, maxLength = 500): string {
     .trim();
   return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength - 1)}…`;
 }
+
+export function sanitizeSourceUrl(raw: string): string | undefined {
+  try {
+    const url = new URL(raw);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}

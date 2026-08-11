@@ -10,6 +10,7 @@ export type SourceCallRow = {
   latencyMs: number;
   status: "fresh" | "failed";
   reportId?: number;
+  researchRunId?: number;
   runId?: number;
   meta?: Record<string, unknown>;
 };

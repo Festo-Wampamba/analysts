@@ -1,12 +1,34 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  earningsCalendarSchema,
+  marketHolidaySchema,
   metricNumber,
   metricsSchema,
   profileSchema,
   quoteLooksEmpty,
   quoteSchema,
 } from "./finnhub-schemas";
+
+describe("calendar schemas", () => {
+  it("accepts earnings calendar rows with nullable estimates", () => {
+    expect(
+      earningsCalendarSchema.safeParse({
+        earningsCalendar: [{ date: "2026-10-29", epsEstimate: null, symbol: "AAPL" }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts the US exchange holiday response", () => {
+    expect(
+      marketHolidaySchema.safeParse({
+        data: [{ eventName: "Labor Day", atDate: "2026-09-07", tradingHour: "" }],
+        exchange: "US",
+        timezone: "America/New_York",
+      }).success,
+    ).toBe(true);
+  });
+});
 
 const validQuote = {
   c: 227.52,

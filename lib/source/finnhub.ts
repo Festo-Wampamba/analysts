@@ -5,6 +5,8 @@ import { fetchWithRetry } from "@/lib/http/retry";
 import { recordSourceCall } from "@/lib/source/log";
 import {
   insiderTransactionsSchema,
+  earningsCalendarSchema,
+  marketHolidaySchema,
   metricsSchema,
   newsSchema,
   peersSchema,
@@ -12,6 +14,8 @@ import {
   quoteSchema,
   recommendationsSchema,
   type InsiderTransactions,
+  type EarningsCalendar,
+  type MarketHoliday,
   type Metrics,
   type NewsItem,
   type Peers,
@@ -43,6 +47,7 @@ export class FinnhubError extends Error {
 export type CallContext = {
   ticker?: string;
   reportId?: number;
+  researchRunId?: number;
   runId?: number;
 };
 
@@ -86,6 +91,7 @@ async function finnhubGet<S extends z.ZodType>(
       latencyMs: Math.round(performance.now() - started),
       status: "failed",
       reportId: ctx.reportId,
+      researchRunId: ctx.researchRunId,
       runId: ctx.runId,
       meta: { error: (cause as Error).message },
     });
@@ -105,6 +111,7 @@ async function finnhubGet<S extends z.ZodType>(
       latencyMs,
       status: "failed",
       reportId: ctx.reportId,
+      researchRunId: ctx.researchRunId,
       runId: ctx.runId,
       meta,
     });
@@ -124,6 +131,7 @@ async function finnhubGet<S extends z.ZodType>(
       latencyMs,
       status: "failed",
       reportId: ctx.reportId,
+      researchRunId: ctx.researchRunId,
       runId: ctx.runId,
       meta: { ...meta, error: "response failed schema validation" },
     });
@@ -143,6 +151,7 @@ async function finnhubGet<S extends z.ZodType>(
     latencyMs,
     status: "fresh",
     reportId: ctx.reportId,
+    researchRunId: ctx.researchRunId,
     runId: ctx.runId,
     meta,
   });
@@ -230,4 +239,30 @@ export function getRecommendations(
     ticker,
     ...ctx,
   });
+}
+
+export function getEarningsCalendar(
+  ticker: string,
+  from: string,
+  to: string,
+  ctx?: CallContext,
+): Promise<Sourced<EarningsCalendar>> {
+  return finnhubGet(
+    "/calendar/earnings",
+    { symbol: ticker, from, to },
+    earningsCalendarSchema,
+    { ticker, ...ctx },
+  );
+}
+
+export function getMarketHolidays(
+  exchange = "US",
+  ctx?: CallContext,
+): Promise<Sourced<MarketHoliday>> {
+  return finnhubGet(
+    "/stock/market-holiday",
+    { exchange },
+    marketHolidaySchema,
+    ctx,
+  );
 }

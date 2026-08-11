@@ -28,6 +28,57 @@ export const sourceCallStatus = pgEnum("source_call_status", [
   "unknown",
 ]);
 
+export const researchRunStatus = pgEnum("research_run_status", [
+  "running",
+  "complete",
+  "fallback",
+  "failed",
+]);
+
+export const researchRuns = pgTable(
+  "research_runs",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    ticker: text("ticker").notNull(),
+    status: researchRunStatus("status").notNull().default("running"),
+    factFingerprint: text("fact_fingerprint"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("research_runs_ticker_started_idx").on(t.ticker, t.startedAt)],
+);
+
+export const providerCache = pgTable(
+  "provider_cache",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    provider: text("provider").notNull(),
+    kind: text("kind").notNull(),
+    ticker: text("ticker").notNull(),
+    cacheKey: text("cache_key").notNull().default("default"),
+    payload: jsonb("payload").notNull(),
+    providerTimestamp: timestamp("provider_timestamp", { withTimezone: true }),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("provider_cache_lookup_idx").on(
+      t.provider,
+      t.kind,
+      t.ticker,
+      t.cacheKey,
+    ),
+    index("provider_cache_expiry_idx").on(t.expiresAt),
+  ],
+);
+
 export const screenRuns = pgTable(
   "screen_runs",
   {
@@ -135,6 +186,7 @@ export const sourceCalls = pgTable(
     status: sourceCallStatus("status").notNull(),
     // Linkage: a call belongs to a cached report and/or a screen run.
     reportId: integer("report_id").references(() => reportsCache.id),
+    researchRunId: integer("research_run_id").references(() => researchRuns.id),
     runId: integer("run_id").references(() => screenRuns.id),
     // Groq usage object lands here for cost measurement (README §11).
     meta: jsonb("meta"),
@@ -144,6 +196,7 @@ export const sourceCalls = pgTable(
   },
   (t) => [
     index("source_calls_report_id_idx").on(t.reportId),
+    index("source_calls_research_run_id_idx").on(t.researchRunId),
     index("source_calls_run_id_idx").on(t.runId),
   ],
 );

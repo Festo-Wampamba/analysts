@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractNumericClaims,
   sanitizeSourceText,
+  sanitizeSourceUrl,
   verifyNumericClaims,
 } from "./guards";
 
@@ -125,5 +126,18 @@ describe("sanitizeSourceText", () => {
     expect(sanitizeSourceText("Apple beats Q3 estimates")).toBe(
       "Apple beats Q3 estimates",
     );
+  });
+});
+
+describe("sanitizeSourceUrl", () => {
+  it("accepts HTTP source links", () => {
+    expect(sanitizeSourceUrl("https://example.com/story")).toBe(
+      "https://example.com/story",
+    );
+  });
+
+  it("rejects executable and malformed links", () => {
+    expect(sanitizeSourceUrl("javascript:alert(1)")).toBeUndefined();
+    expect(sanitizeSourceUrl("not a url")).toBeUndefined();
   });
 });

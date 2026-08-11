@@ -12,7 +12,7 @@ import type {
   Quote,
   Recommendations,
 } from "@/lib/source/finnhub-schemas";
-import { sanitizeSourceText } from "@/lib/ai/guards";
+import { sanitizeSourceText, sanitizeSourceUrl } from "@/lib/ai/guards";
 
 // The sourced-facts snapshot: everything the report may state as fact.
 // Anything absent here cannot legitimately appear in generated prose — the
@@ -173,13 +173,24 @@ export function buildResearchFacts(
 
   if (sources.news?.length) {
     facts.news = sources.news
+      .filter((item) =>
+        item.related
+          ?.split(",")
+          .map((symbol) => symbol.trim().toUpperCase())
+          .includes(ticker.toUpperCase()),
+      )
       .slice(0, MAX_NEWS_ITEMS)
-      .map((item) => ({
-        headline: sanitizeSourceText(item.headline, 200),
-        source: sanitizeSourceText(item.source, 60),
-        url: item.url,
-        date: new Date(item.datetime * 1000).toISOString().slice(0, 10),
-      }));
+      .flatMap((item) => {
+        const url = sanitizeSourceUrl(item.url);
+        return url
+          ? [{
+              headline: sanitizeSourceText(item.headline, 200),
+              source: sanitizeSourceText(item.source, 60),
+              url,
+              date: new Date(item.datetime * 1000).toISOString().slice(0, 10),
+            }]
+          : [];
+      });
   }
 
   if (sources.recommendations?.length) {
