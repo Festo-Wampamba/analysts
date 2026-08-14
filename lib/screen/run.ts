@@ -32,7 +32,9 @@ import { resolveTradingDate } from "./trading-date";
 import { SCREEN_UNIVERSE, type UniverseEntry } from "./universe";
 import type { DailyIdeaFacts, DailyIdeaPayload, ScreenRunResult } from "./types";
 
-const TOP_CANDIDATES = 5;
+// Persist a broad enough ordered queue for users to investigate alternatives,
+// while retaining the first qualifying candidate as the one daily idea.
+export const TOP_CANDIDATES = 15;
 const NEWS_LOOKBACK_DAYS = 14;
 
 export class ScreenError extends Error {

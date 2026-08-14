@@ -6,7 +6,7 @@ import {
   ResearchWorkspaceView,
 } from "@/components/ResearchWorkspaceView";
 import { isValidTicker, normalizeTicker } from "@/lib/research/ticker";
-import { getResearchWorkspace, workspaceQuoteStatus } from "@/lib/research/workspace";
+import { getResearchWorkspace } from "@/lib/research/workspace";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { consumeRateLimit, requestIdentifier } from "@/lib/http/rate-limit";
@@ -48,7 +48,7 @@ export default async function ResearchTickerPage({
     ? <ResearchWorkspaceView workspace={workspace} />
     : <WorkspaceError title={errorTitle ?? "Research unavailable"} detail={errorDetail ?? "The report could not be assembled."} />;
 
-  return <div className="app-shell"><AmbientLayer /><AppTopbar quoteStatus={workspaceQuoteStatus(workspace)} />{content}<AppFooter /></div>;
+  return <div className="app-shell"><AmbientLayer /><AppTopbar ticker={workspace?.report.ticker} chartAsOf={workspace?.chart?.asOf} />{content}<AppFooter /></div>;
 }
 
 function WorkspaceError({ title, detail }: { title: string; detail: string }) {

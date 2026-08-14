@@ -9,7 +9,6 @@ import { DailyIdeaView } from "@/components/DailyIdeaView";
 import {
   getResearchWorkspace,
   type ResearchWorkspace,
-  workspaceQuoteStatus,
 } from "@/lib/research/workspace";
 import { getLatestIdea, type LatestIdea } from "@/lib/screen/get-latest-idea";
 
@@ -41,7 +40,10 @@ export default async function Home() {
   return (
     <div className="app-shell">
       <AmbientLayer />
-      <AppTopbar quoteStatus={workspaceQuoteStatus(workspace)} />
+      <AppTopbar
+        ticker={workspace?.report.ticker}
+        chartAsOf={workspace?.chart?.asOf}
+      />
       {workspace ? (
         <ResearchWorkspaceView workspace={workspace} confidence={latest?.confidence} />
       ) : (

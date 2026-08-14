@@ -1,4 +1,5 @@
 import { PriceChart } from "@/components/PriceChart";
+import { LiveMarketStatus } from "@/components/LiveMarketStatus";
 import { TickerSearch } from "@/components/TickerSearch";
 import Link from "next/link";
 import type { Provenance } from "@/lib/domain/provenance";
@@ -30,10 +31,6 @@ function SparkIcon({ className = "" }: { className?: string }) {
 
 function ChartIcon() {
   return <svg className="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19V9m6 10V5m6 14v-7m4 7H2" /></svg>;
-}
-
-function StatusIcon() {
-  return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 1-4.3-7.1" /><path d="m9 11 2 2 5-6" /></svg>;
 }
 
 export function FactLabel({ children, tone = "fact" }: { children: React.ReactNode; tone?: "fact" | "ai" }) {
@@ -92,14 +89,22 @@ function SectionHeading({ id, number, title }: { id: string; number: string; tit
   return <div className="section-heading"><h2 id={`${id}-title`}><span className="section-number">{number}</span>{title}</h2></div>;
 }
 
-export function AppTopbar({ quoteStatus = "Data status unavailable" }: { quoteStatus?: string }) {
+export function AppTopbar({
+  ticker,
+  chartAsOf,
+  quoteStatus = "Market data unavailable",
+}: {
+  ticker?: string | null;
+  chartAsOf?: string | null;
+  quoteStatus?: string;
+}) {
   return (
     <nav className="topbar">
       <div className="topbar-inner">
         <Link className="brand-lockup" href="/" aria-label="Analysts home"><span className="brand-mark" aria-hidden="true">A</span><span className="brand-name">Analysts</span></Link>
         <div className="topbar-paths"><a className="nav-path nav-path--active" href="#research"><ChartIcon />Research</a><Link className="nav-path" href="/#daily-idea"><SparkIcon className="nav-icon" />Daily Idea</Link></div>
         <TickerSearch />
-        <span className="status-chip"><StatusIcon />{quoteStatus}</span>
+        <LiveMarketStatus ticker={ticker} initialAsOf={chartAsOf} unavailableLabel={quoteStatus} />
       </div>
     </nav>
   );

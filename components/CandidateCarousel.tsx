@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { CandidateResearchPreview } from "@/components/CandidateResearchPreview";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
 
 type Candidate = LatestIdea["candidates"][number];
@@ -31,6 +32,7 @@ export function CandidateCarousel({
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
   const [paused, setPaused] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(60);
+  const [researchTicker, setResearchTicker] = useState<string | null>(initialTicker ?? initialCandidates[0]?.ticker ?? null);
   const trackRef = useRef<HTMLDivElement>(null);
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
@@ -91,8 +93,10 @@ export function CandidateCarousel({
 
   if (!selected) return null;
 
-  function choose(index: number) {
-    setSelectedIndex((index + candidates.length) % candidates.length);
+  function choose(index: number, loadResearch = true) {
+    const nextIndex = (index + candidates.length) % candidates.length;
+    setSelectedIndex(nextIndex);
+    if (loadResearch) setResearchTicker(candidates[nextIndex]?.ticker ?? null);
     setSecondsRemaining(60);
   }
 
@@ -164,6 +168,12 @@ export function CandidateCarousel({
           Open {selected.ticker} research
         </Link>
       </div>
+      {researchTicker && researchTicker !== selected.ticker && (
+        <p className="candidate-carousel__auto-note" role="status">
+          Auto rotation highlighted {selected.ticker}. Select it to load its sourced research; the preview below remains {researchTicker}.
+        </p>
+      )}
+      {researchTicker && <CandidateResearchPreview ticker={researchTicker} />}
     </section>
   );
 }

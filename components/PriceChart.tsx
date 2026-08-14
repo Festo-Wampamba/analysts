@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { marketFreshness } from "@/lib/market/freshness";
 import type { ChartPoint, ChartRange, ChartSeries } from "@/lib/source/chart";
 
 type ChartState = ChartSeries | { error: string };
 
 const chartRanges: ChartRange[] = ["1d", "5d", "1m", "1y"];
 const EASTERN_TIME_ZONE = "America/New_York";
-const FRESH_WINDOW_MS = 5 * 60 * 60 * 1000;
 const ONE_DAY_REFRESH_MS = 5 * 60 * 1000;
 
 function chartGeometry(points: ChartPoint[]) {
@@ -85,18 +85,6 @@ function formatTooltipTime(value: string): string {
   }).format(date);
 }
 
-function freshnessLabel(asOf: string): { label: string; stale: boolean } {
-  const timestamp = new Date(asOf).getTime();
-  if (!Number.isFinite(timestamp)) return { label: "Provider time unavailable", stale: true };
-  const ageMs = Math.max(0, Date.now() - timestamp);
-  if (ageMs <= FRESH_WINDOW_MS) {
-    const minutes = Math.max(1, Math.round(ageMs / 60_000));
-    return { label: `Fresh · ${minutes}m ago`, stale: false };
-  }
-  const hours = Math.floor(ageMs / 3_600_000);
-  return { label: `Stale · ${hours}h ago`, stale: true };
-}
-
 function axisLabels(series: ChartSeries): { value: string; x: number; anchor: "start" | "middle" | "end" }[] {
   const points = series.points;
   const indexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
@@ -143,7 +131,7 @@ export function PriceChart({
   const change = latest && opening && opening.close !== 0
     ? ((latest.close - opening.close) / opening.close) * 100
     : null;
-  const freshness = latest ? freshnessLabel(series!.asOf) : null;
+  const freshness = latest ? marketFreshness(series!.asOf) : null;
 
   const loadRange = useCallback(async (next: ChartRange, options: { force?: boolean } = {}) => {
     if (!options.force && next === range && series) return;

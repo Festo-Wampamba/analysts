@@ -147,6 +147,7 @@ import {
   getScreenStatus,
   runDailyScreen,
   runScreenInBackground,
+  TOP_CANDIDATES,
 } from "./run";
 import type { UniverseEntry } from "./universe";
 
@@ -288,6 +289,35 @@ describe("runDailyScreen happy path", () => {
     mockHappyPath();
     await runDailyScreen(universe);
     expect(state.insertedCandidates.map((c) => c.ticker)).toEqual(["AAA", "BBB"]);
+  });
+
+  it("persists the top fifteen candidates in rank order when the universe is larger", async () => {
+    mockHappyPath();
+    const expandedUniverse = Array.from({ length: TOP_CANDIDATES + 1 }, (_, index) => ({
+      ticker: `T${String.fromCharCode(65 + index)}A`,
+      sector: "Technology",
+    }));
+    const expandedCandidates = Array.from({ length: TOP_CANDIDATES + 1 }, (_, index) => ({
+      ...candidates()[0],
+      ticker: expandedUniverse[index].ticker,
+      metrics: {
+        ...candidates()[0].metrics,
+        revenueGrowthTTMYoy: 100 - index,
+        epsGrowthTTMYoy: 100 - index,
+      },
+    }));
+    vi.mocked(fetchUniverseCandidates).mockResolvedValue({
+      candidates: expandedCandidates,
+      failedTickers: [],
+    });
+
+    const result = await runDailyScreen(expandedUniverse);
+
+    expect(result.topCandidates).toHaveLength(TOP_CANDIDATES);
+    expect(state.insertedCandidates).toHaveLength(TOP_CANDIDATES);
+    expect(state.insertedCandidates.map((candidate) => candidate.rank)).toEqual(
+      Array.from({ length: TOP_CANDIDATES }, (_, index) => index + 1),
+    );
   });
 
   it("stores the model's catalyst on the winning candidate row", async () => {

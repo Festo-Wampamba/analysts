@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/research/workspace", () => ({
   getResearchWorkspace: vi.fn(),
-  workspaceQuoteStatus: vi.fn(() => "Quote unavailable"),
 }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("@/components/ResearchWorkspaceView", () => ({
