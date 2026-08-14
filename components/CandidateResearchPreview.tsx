@@ -133,7 +133,7 @@ export function CandidateResearchPreview({ ticker }: { ticker: string }) {
   return (
     <section className="candidate-research-preview" aria-live="polite">
       <div className="candidate-research-preview__head">
-        <div><span className="eyebrow eyebrow--fact">Live provider facts · {data.ticker}</span><strong>{data.companyName ?? data.ticker}</strong></div>
+        <div><span className="eyebrow eyebrow--fact">Selected research · {data.ticker}</span><strong>{data.companyName ?? data.ticker}</strong><small>Live provider facts and a sourced narrative for this selected ranked candidate.</small></div>
         <Link className="button" href={`/research/${data.ticker}`}>Open full sourced report</Link>
       </div>
       <div className="candidate-research-preview__facts">

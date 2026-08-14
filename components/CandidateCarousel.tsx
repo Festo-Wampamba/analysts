@@ -112,6 +112,7 @@ export function CandidateCarousel({
                 : `Auto advance in ${formatSeconds(secondsRemaining)}`
               : "One ranked candidate"}
           </p>
+          <small>{candidates.length} ranked candidates · select one to load its own live sourced research</small>
         </div>
         <div className="candidate-carousel__controls">
           <button

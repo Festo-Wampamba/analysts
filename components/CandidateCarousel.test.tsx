@@ -57,6 +57,7 @@ describe("CandidateCarousel", () => {
   it("rotates to the next sourced candidate after one minute", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
+    expect(screen.getByText("2 ranked candidates · select one to load its own live sourced research")).toBeInTheDocument();
     expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("NVDA");
     act(() => vi.advanceTimersByTime(60_000));
 

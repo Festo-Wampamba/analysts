@@ -34,7 +34,10 @@ import type { DailyIdeaFacts, DailyIdeaPayload, ScreenRunResult } from "./types"
 
 // Persist a broad enough ordered queue for users to investigate alternatives,
 // while retaining the first qualifying candidate as the one daily idea.
-export const TOP_CANDIDATES = 15;
+// Keep the top twenty ranked candidates from every completed screen. This is
+// intentionally wider than the single daily pick so readers can compare and
+// open sourced research for the rest of the highest-quality opportunities.
+export const TOP_CANDIDATES = 20;
 const NEWS_LOOKBACK_DAYS = 14;
 
 export class ScreenError extends Error {

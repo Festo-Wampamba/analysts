@@ -3,7 +3,7 @@
 A daily cross-sectional equity screen. Every weekday, the app scores a
 54-ticker, 9-sector universe of large- and mid-cap US stocks on Finnhub
 market data, and — if any candidate clears the qualification threshold —
-generates a sourced investment narrative with Groq (Llama 3.3 70B), emails it
+generates a sourced investment narrative with Groq (GPT-OSS 120B), emails it
 out, and publishes it at `/`. A companion on-demand research workspace at
 `/research/[ticker]` runs the same sourced-facts-plus-narrative pipeline for
 any single ticker. Quotes, filings, charts, and generated narrative use
@@ -42,7 +42,7 @@ Authoritative list — from `grep -rhoE "process\.env\.[A-Z_]+" lib/ app/`:
 | `ALPHA_VANTAGE_API_KEY` | no | Optional fallback for daily and weekly historical charts when its API entitlement permits it. |
 | `ALPHA_VANTAGE_DAILY_BUDGET` | no | Application-side request ceiling; defaults to `20`. |
 | `GROQ_API_KEY` | yes | LLM narrative generation (`lib/ai/groq.ts`). |
-| `GROQ_MODEL` | no | Overrides the Groq model; defaults to `llama-3.3-70b-versatile`. |
+| `GROQ_MODEL` | no | Overrides the Groq model; defaults to `openai/gpt-oss-120b`. The retiring `llama-3.3-70b-versatile` value is remapped automatically, but should be updated in deployment settings. |
 | `CRON_SECRET` | yes | Bearer token required on both `POST` and `GET /api/screen`. Generate with `openssl rand -hex 32`. |
 | `RESEND_API_KEY` | no* | Delivery of the daily idea email (`lib/email/resend.ts`). |
 | `DAILY_IDEA_FROM` | no* | From-address for the daily idea email; must be on a domain verified in Resend. |

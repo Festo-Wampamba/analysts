@@ -15,7 +15,7 @@ vi.mock("@/lib/db", () => ({
   schema: { sourceCalls: {} },
 }));
 
-import { GroqError, groqJson } from "./groq";
+import { DEFAULT_MODEL, GroqError, groqJson, resolveGroqModel } from "./groq";
 
 const outputSchema = z.object({ thesis: z.string() });
 
@@ -57,6 +57,28 @@ afterEach(() => {
 });
 
 describe("groqJson", () => {
+  it("defaults to Groq's supported GPT-OSS replacement model", async () => {
+    vi.stubEnv("GROQ_MODEL", "");
+    mockFetchOnce(200, completionBody('{"thesis":"x"}'));
+
+    await groqJson(params);
+
+    const body = JSON.parse(
+      (vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(DEFAULT_MODEL).toBe("openai/gpt-oss-120b");
+    expect(body.model).toBe("openai/gpt-oss-120b");
+  });
+
+  it("maps the retiring Llama configuration to its Groq replacement", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(resolveGroqModel("llama-3.3-70b-versatile")).toBe("openai/gpt-oss-120b");
+    expect(warning).toHaveBeenCalledWith(
+      "GROQ_MODEL=llama-3.3-70b-versatile is retired; using openai/gpt-oss-120b instead.",
+    );
+  });
+
   it("returns schema-validated data from the model's JSON content", async () => {
     mockFetchOnce(200, completionBody('{"thesis":"Quality compounder."}'));
     const { data } = await groqJson(params);
