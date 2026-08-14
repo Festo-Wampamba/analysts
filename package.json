@@ -20,6 +20,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@next/env": "16.3.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 
 import { FinnhubError } from "@/lib/source/finnhub";
 import { GroqError } from "@/lib/ai/groq";
-import { getResearchReport, ReportError } from "@/lib/research/report";
+import { ReportError } from "@/lib/research/report";
 import { isValidTicker, normalizeTicker } from "@/lib/research/ticker";
+import { getResearchWorkspace } from "@/lib/research/workspace";
+import { consumeRateLimit, requestIdentifier } from "@/lib/http/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   ctx: RouteContext<"/api/research/[ticker]">,
 ) {
   const { ticker: raw } = await ctx.params;
@@ -21,8 +23,28 @@ export async function GET(
     );
   }
 
+  const limit = consumeRateLimit("research-api", requestIdentifier(request.headers));
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited", message: "Too many research requests. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   try {
-    return NextResponse.json(await getResearchReport(ticker));
+    const workspace = await getResearchWorkspace(ticker);
+    return NextResponse.json({
+      ...workspace.report,
+      workspace: {
+        financials: workspace.financials,
+        peers: workspace.peers,
+        earnings: workspace.earnings,
+        chart: workspace.chart,
+        additionalProvenance: workspace.additionalProvenance,
+        failedSections: workspace.failedSections,
+        researchRunId: workspace.researchRunId,
+      },
+    });
   } catch (err) {
     if (err instanceof ReportError) {
       const status = err.code === "unknown_ticker" ? 404 : 502;

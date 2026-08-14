@@ -64,6 +64,7 @@ function isoDaysAgo(days: number): string {
 // abort the report (Final-design.md §9.16 provider failure state).
 export async function fetchResearchSources(
   ticker: string,
+  context: { researchRunId?: number } = {},
 ): Promise<{
   sources: RawResearchSources;
   provenance: Provenance[];
@@ -72,12 +73,12 @@ export async function fetchResearchSources(
   const today = new Date().toISOString().slice(0, 10);
 
   const calls = {
-    quote: getQuote(ticker),
-    profile: getProfile(ticker),
-    metrics: getMetrics(ticker),
-    peers: getPeers(ticker),
-    news: getCompanyNews(ticker, isoDaysAgo(NEWS_LOOKBACK_DAYS), today),
-    recommendations: getRecommendations(ticker),
+    quote: getQuote(ticker, context),
+    profile: getProfile(ticker, context),
+    metrics: getMetrics(ticker, context),
+    peers: getPeers(ticker, context),
+    news: getCompanyNews(ticker, isoDaysAgo(NEWS_LOOKBACK_DAYS), today, context),
+    recommendations: getRecommendations(ticker, context),
   } as const;
 
   const names = Object.keys(calls) as (keyof typeof calls)[];
@@ -121,6 +122,7 @@ function narrativeToText(narrative: ResearchNarrative): string {
 async function generateVerifiedNarrative(
   facts: ResearchFacts,
   allowlist: number[],
+  context: { researchRunId?: number } = {},
 ): Promise<{
   narrative: ResearchNarrative;
   generated: GeneratedContentMeta;
@@ -136,7 +138,7 @@ async function generateVerifiedNarrative(
         outputSchema: researchNarrativeSchema,
         basedOn,
       },
-      { ticker: facts.ticker },
+      { ticker: facts.ticker, ...context },
     );
     const guard = verifyNumericClaims(narrativeToText(result.data), allowlist);
     return { result, guard };
@@ -170,6 +172,58 @@ async function generateVerifiedNarrative(
   };
 }
 
+function deterministicResearchFallback(facts: ResearchFacts): {
+  narrative: ResearchNarrative;
+  generated: GeneratedContentMeta;
+  model: string;
+} {
+  const company = facts.company?.name ?? facts.ticker;
+  const hasNews = !!facts.news?.length;
+  return {
+    narrative: {
+      overview: `${company} is presented from the sourced company profile and market-data snapshot available to this report.`,
+      businessModel:
+        "Use the company profile and filing-derived financials to assess how the business earns revenue; source coverage may not describe every segment.",
+      financialPerformance:
+        "Reported financial values should be read directly from the sourced financial table and compared on matching fiscal periods.",
+      balanceSheet:
+        "Balance-sheet conclusions are limited to the available sourced liquidity and leverage measures.",
+      valuation:
+        "The valuation table shows the available market multiples without adding a model-derived target price.",
+      peers:
+        "Peer comparisons are relative snapshots and may be incomplete when a provider omits a company or metric.",
+      recentDevelopments: hasNews
+        ? "Recent company-related coverage is listed in the catalyst section and should be verified at the linked source."
+        : "No relevant recent company coverage was available from the configured source.",
+      growthDrivers:
+        "Potential growth drivers should be evaluated against the sourced growth, profitability, and market-position evidence.",
+      catalysts: hasNews
+        ? "Relevant dated company developments and scheduled earnings are the primary observable catalysts."
+        : "Scheduled earnings are the primary dated catalyst available to this report.",
+      risks: [
+        "Market-data and filing coverage can be incomplete or delayed.",
+        "Relative valuation and momentum can change before the next report refresh.",
+      ],
+      scenarios: [
+        { label: "bull", summary: "The constructive case requires operating strengths and relevant catalysts to develop favorably." },
+        { label: "base", summary: "The central case assumes current operating trends remain broadly intact." },
+        { label: "bear", summary: "The adverse case reflects weakening fundamentals, expectations, or company-specific developments." },
+      ],
+      thesis:
+        "The investment case should be based on the sourced operating evidence, valuation context, and identified risks rather than generated forecasts.",
+      limitations: ["Model output failed factual verification, so deterministic explanatory text is shown."],
+    },
+    generated: {
+      generatedAt: new Date().toISOString(),
+      basedOn: Object.keys(facts).filter((key) => key !== "ticker"),
+      modelLabel: "deterministic-safety-fallback",
+      limitations: ["Model output failed factual verification."],
+      status: "fallback",
+    },
+    model: "deterministic-safety-fallback",
+  };
+}
+
 async function readCachedReport(ticker: string) {
   const [row] = await db
     .select()
@@ -196,7 +250,10 @@ function agedProvenance(provenance: Provenance[]): Provenance[] {
   });
 }
 
-export async function getResearchReport(ticker: string): Promise<ResearchReport> {
+export async function getResearchReport(
+  ticker: string,
+  context: { researchRunId?: number } = {},
+): Promise<ResearchReport> {
   const cached = await readCachedReport(ticker);
   if (cached) {
     const payload = cached.facts as {
@@ -213,13 +270,17 @@ export async function getResearchReport(ticker: string): Promise<ResearchReport>
         generatedAt: cached.generatedAt.toISOString(),
         basedOn: Object.keys(payload.facts).filter((key) => key !== "ticker"),
         modelLabel: cached.model,
+        status: cached.model === "deterministic-safety-fallback" ? "fallback" : "generated",
       },
       failedProviders: payload.failedProviders,
       cached: true,
     };
   }
 
-  const { sources, provenance, failedProviders } = await fetchResearchSources(ticker);
+  const { sources, provenance, failedProviders } = await fetchResearchSources(
+    ticker,
+    context,
+  );
   const facts = buildResearchFacts(ticker, sources);
 
   if (!hasMinimumFacts(facts)) {
@@ -242,10 +303,18 @@ export async function getResearchReport(ticker: string): Promise<ResearchReport>
   }
 
   const allowlist = buildNumericAllowlist(facts);
-  const { narrative, generated, model } = await generateVerifiedNarrative(
-    facts,
-    allowlist,
-  );
+  let generatedReport: {
+    narrative: ResearchNarrative;
+    generated: GeneratedContentMeta;
+    model: string;
+  };
+  try {
+    generatedReport = await generateVerifiedNarrative(facts, allowlist, context);
+  } catch (error) {
+    console.error("research generation verification failed; using fallback:", error);
+    generatedReport = deterministicResearchFallback(facts);
+  }
+  const { narrative, generated, model } = generatedReport;
 
   const generatedAt = new Date(generated.generatedAt);
   await db.insert(schema.reportsCache).values({

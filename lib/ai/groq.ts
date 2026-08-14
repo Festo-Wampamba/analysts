@@ -23,6 +23,7 @@ export class GroqError extends Error {
 export type GroqCallContext = {
   ticker?: string;
   reportId?: number;
+  researchRunId?: number;
   runId?: number;
 };
 
@@ -83,6 +84,7 @@ export async function groqJson<S extends z.ZodType>(
       fetchedAt,
       latencyMs: Math.round(performance.now() - started),
       reportId: ctx.reportId,
+      researchRunId: ctx.researchRunId,
       runId: ctx.runId,
       ...row,
     });
@@ -176,6 +178,7 @@ export async function groqJson<S extends z.ZodType>(
       generatedAt: fetchedAt.toISOString(),
       basedOn: params.basedOn,
       modelLabel: completion.data.model,
+      status: "generated",
     },
   };
 }

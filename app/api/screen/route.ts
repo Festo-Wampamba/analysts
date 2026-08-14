@@ -6,7 +6,7 @@ import {
   getScreenStatus,
   runScreenInBackground,
 } from "@/lib/screen/run";
-import { currentTradingDate } from "@/lib/screen/trading-date";
+import { resolveTradingDate } from "@/lib/screen/trading-date";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const status = await getScreenStatus(currentTradingDate());
+  const status = await getScreenStatus(await resolveTradingDate());
   if (!status) {
     return NextResponse.json({ error: "not_started" }, { status: 404 });
   }

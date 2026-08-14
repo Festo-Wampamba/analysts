@@ -1,83 +1,52 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/research/workspace", () => ({
+  getResearchWorkspace: vi.fn(),
+}));
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
+vi.mock("@/components/ResearchWorkspaceView", () => ({
+  AmbientLayer: () => null,
+  AppFooter: () => null,
+  AppTopbar: () => null,
+  Panel: ({ children }: { children: React.ReactNode }) => <section>{children}</section>,
+  ResearchWorkspaceView: ({ workspace }: { workspace: { report: { facts: { company?: { name?: string }; quote?: { price?: number } } } } }) => (
+    <main><h1>{workspace.report.facts.company?.name}</h1><span>{workspace.report.facts.quote?.price}</span></main>
+  ),
+}));
+
+import { getResearchWorkspace } from "@/lib/research/workspace";
 import ResearchTickerPage from "./page";
 
+beforeEach(() => vi.clearAllMocks());
+
 describe("ResearchTickerPage", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  it("renders the shared workspace for a valid ticker", async () => {
+    vi.mocked(getResearchWorkspace).mockResolvedValue({
+      report: { facts: { company: { name: "Apple Inc" }, quote: { price: 200 } } },
+    } as never);
+
+    render(await ResearchTickerPage({ params: Promise.resolve({ ticker: "aapl" }) }));
+
+    expect(screen.getByText("Apple Inc")).toBeInTheDocument();
+    expect(screen.getByText("200")).toBeInTheDocument();
+    expect(getResearchWorkspace).toHaveBeenCalledWith("AAPL");
   });
 
-  it("renders the company name and price for a successful report", async () => {
-    const report = {
-      ticker: "AAPL",
-      facts: {
-        ticker: "AAPL",
-        company: { name: "Apple Inc" },
-        quote: {
-          price: 200,
-          previousClose: 198,
-          open: 199,
-          dayHigh: 201,
-          dayLow: 198,
-          change: { value: 2, formatted: "+2.00", direction: "positive" },
-          changePercent: { value: 1.01, formatted: "+1.01%", direction: "positive" },
-        },
-      },
-      narrative: {
-        overview: "Apple's ecosystem economics remain intact.",
-        businessModel: "Hardware-led with a growing services layer.",
-        financialPerformance: "Revenue growth driven by iPhone and services.",
-        balanceSheet: "Net cash position supports buybacks.",
-        valuation: "Trades in line with its historical multiple.",
-        peers: "Trades at a premium to hardware peers.",
-        recentDevelopments: "Recent product cycle announcements.",
-        growthDrivers: "Services attach rate and installed base growth.",
-        catalysts: "Product cycle",
-        risks: ["Competition"],
-        scenarios: [
-          { label: "bull", summary: "Upside case" },
-          { label: "base", summary: "Base case" },
-          { label: "bear", summary: "Downside case" },
-        ],
-        thesis: "Durable ecosystem moat.",
-        limitations: [],
-      },
-      provenance: [
-        { provider: "finnhub", fetchedAt: "2026-08-05T10:00:00.000Z", status: "fresh" },
-      ],
-      generated: { generatedAt: "2026-08-05T10:00:00.000Z", basedOn: ["quote"], modelLabel: "llama-3.3-70b-versatile" },
-      failedProviders: [],
-      cached: false,
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response(JSON.stringify(report), { status: 200 })),
-    );
+  it("rejects an invalid ticker before calling providers", async () => {
+    render(await ResearchTickerPage({ params: Promise.resolve({ ticker: "bad/value" }) }));
 
-    const Page = await ResearchTickerPage({ params: Promise.resolve({ ticker: "AAPL" }) });
-    render(Page);
-
-    expect(await screen.findByText("Apple Inc")).toBeInTheDocument();
-    expect(screen.getByText("+2.00")).toBeInTheDocument();
-    expect(screen.getByText("Product cycle")).toBeInTheDocument();
+    expect(screen.getByText("Invalid ticker")).toBeInTheDocument();
+    expect(getResearchWorkspace).not.toHaveBeenCalled();
   });
 
-  it("renders a StatusNotice when the ticker is unknown", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ error: "unknown_ticker", message: "No such ticker." }),
-          { status: 404 },
-        ),
-      ),
-    );
+  it("renders a safe unavailable state when providers fail", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getResearchWorkspace).mockRejectedValue(new Error("provider down"));
 
-    const Page = await ResearchTickerPage({ params: Promise.resolve({ ticker: "ZZZZ" }) });
-    render(Page);
+    render(await ResearchTickerPage({ params: Promise.resolve({ ticker: "AAPL" }) }));
 
-    expect(await screen.findByText("No such ticker.")).toBeInTheDocument();
+    expect(screen.getByText("No report available for AAPL")).toBeInTheDocument();
   });
 });

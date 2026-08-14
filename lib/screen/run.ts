@@ -1,7 +1,11 @@
 import { and, eq, lt, or } from "drizzle-orm";
 
 import { groqJson } from "@/lib/ai/groq";
-import { sanitizeSourceText, verifyNumericClaims } from "@/lib/ai/guards";
+import {
+  sanitizeSourceText,
+  sanitizeSourceUrl,
+  verifyNumericClaims,
+} from "@/lib/ai/guards";
 import {
   dailyIdeaNarrativeSchema,
   type DailyIdeaNarrative,
@@ -24,11 +28,13 @@ import {
   type CandidateInput,
   type ScoredCandidate,
 } from "./score";
-import { currentTradingDate } from "./trading-date";
+import { resolveTradingDate } from "./trading-date";
 import { SCREEN_UNIVERSE, type UniverseEntry } from "./universe";
 import type { DailyIdeaFacts, DailyIdeaPayload, ScreenRunResult } from "./types";
 
-const TOP_CANDIDATES = 5;
+// Persist a broad enough ordered queue for users to investigate alternatives,
+// while retaining the first qualifying candidate as the one daily idea.
+export const TOP_CANDIDATES = 15;
 const NEWS_LOOKBACK_DAYS = 14;
 
 export class ScreenError extends Error {
@@ -89,7 +95,7 @@ async function enrichWinner(
 
   const metrics: Record<string, number> = {};
   for (const [key, value] of Object.entries(input.metrics)) {
-    if (typeof value === "number") metrics[key] = value;
+    if (typeof value === "number") metrics[key] = Math.round(value * 10_000) / 10_000;
   }
 
   const facts: DailyIdeaFacts = {
@@ -115,19 +121,32 @@ async function enrichWinner(
   if (quote.status === "fulfilled" && !quoteLooksEmpty(quote.value.data)) {
     const q = quote.value.data;
     facts.price = {
-      current: q.c,
-      previousClose: q.pc,
-      changePercent: q.dp ?? (q.pc === 0 ? 0 : ((q.c - q.pc) / q.pc) * 100),
+      current: Math.round(q.c * 10_000) / 10_000,
+      previousClose: Math.round(q.pc * 10_000) / 10_000,
+      changePercent: Math.round(
+        (q.dp ?? (q.pc === 0 ? 0 : ((q.c - q.pc) / q.pc) * 100)) * 10_000,
+      ) / 10_000,
     };
   }
 
   if (news.status === "fulfilled" && news.value.data.length > 0) {
-    facts.news = news.value.data.slice(0, 6).map((item) => ({
-      headline: sanitizeSourceText(item.headline, 200),
-      source: sanitizeSourceText(item.source, 60),
-      url: item.url,
-      date: new Date(item.datetime * 1000).toISOString().slice(0, 10),
-    }));
+    const relevant = news.value.data.filter((item) =>
+      item.related
+        ?.split(",")
+        .map((symbol) => symbol.trim().toUpperCase())
+        .includes(winner.ticker.toUpperCase()),
+    );
+    facts.news = relevant.slice(0, 6).flatMap((item) => {
+      const url = sanitizeSourceUrl(item.url);
+      return url
+        ? [{
+            headline: sanitizeSourceText(item.headline, 200),
+            source: sanitizeSourceText(item.source, 60),
+            url,
+            date: new Date(item.datetime * 1000).toISOString().slice(0, 10),
+          }]
+        : [];
+    });
   }
 
   return { facts, provenance };
@@ -202,6 +221,60 @@ async function generateVerifiedIdea(
   }
 
   return { narrative: second.result.data, generated: second.result.meta };
+}
+
+const FACTOR_LABELS: Record<keyof DailyIdeaFacts["factorScores"], string> = {
+  growth: "growth",
+  profitability: "profitability",
+  valuation: "valuation",
+  financialStrength: "financial strength",
+  momentum: "market momentum",
+  sentiment: "analyst sentiment",
+  insiderActivity: "insider activity",
+};
+
+function deterministicIdeaFallback(
+  facts: DailyIdeaFacts,
+): { narrative: DailyIdeaNarrative; generated: GeneratedContentMeta } {
+  const rankedFactors = Object.entries(facts.factorScores)
+    .filter((entry): entry is [keyof DailyIdeaFacts["factorScores"], number] =>
+      typeof entry[1] === "number",
+    )
+    .sort((a, b) => b[1] - a[1])
+    .map(([factor]) => FACTOR_LABELS[factor]);
+  const [first = "available fundamentals", second = "relative positioning"] =
+    rankedFactors;
+
+  return {
+    narrative: {
+      selectionReason: `${facts.ticker} ranked first in the daily screen, led by ${first} and ${second}.`,
+      thesisPoints: [
+        `${first[0].toUpperCase()}${first.slice(1)} was the strongest relative factor in the screened universe.`,
+        `${second[0].toUpperCase()}${second.slice(1)} provided additional support for the ranking.`,
+        "The result is based on the available sourced data and should be reassessed as new information arrives.",
+      ],
+      keyCatalyst: facts.news?.length
+        ? "A recent company-specific development may change how the market assesses the business."
+        : "No dated company-specific catalyst was available from the configured sources.",
+      bullCase:
+        "The constructive case is that the company sustains its strongest operating factors while market expectations remain measured.",
+      bearCase:
+        "The adverse case is that the factors supporting the ranking weaken or the available data no longer reflects current conditions.",
+      risks: [
+        "Provider coverage can be incomplete or delayed.",
+        "A relative screen can rank a company highly even when the broader market backdrop is weak.",
+      ],
+      confidenceRationale:
+        "Confidence reflects data coverage and the candidate's position relative to the qualifying rule.",
+    },
+    generated: {
+      generatedAt: new Date().toISOString(),
+      basedOn: ["screen", ...Object.keys(facts).filter((key) => key !== "ticker")],
+      modelLabel: "deterministic-safety-fallback",
+      limitations: ["Model output failed factual verification."],
+      status: "fallback",
+    },
+  };
 }
 
 // A run stuck in "running" past this long is presumed to belong to a
@@ -369,7 +442,17 @@ async function executeScreen(
         runId,
         candidates.length,
       );
-      const { narrative, generated } = await generateVerifiedIdea(facts);
+      let generatedIdea: {
+        narrative: DailyIdeaNarrative;
+        generated: GeneratedContentMeta;
+      };
+      try {
+        generatedIdea = await generateVerifiedIdea(facts);
+      } catch (error) {
+        console.error("daily idea generation verification failed; using fallback:", error);
+        generatedIdea = deterministicIdeaFallback(facts);
+      }
+      const { narrative, generated } = generatedIdea;
       idea = { facts, narrative, generated, provenance };
 
       const email = await sendEmail(
@@ -461,7 +544,7 @@ async function executeScreen(
 export async function runDailyScreen(
   universe: UniverseEntry[] = SCREEN_UNIVERSE,
 ): Promise<ScreenRunResult> {
-  const tradingDate = currentTradingDate();
+  const tradingDate = await resolveTradingDate();
   const startedAt = Date.now();
 
   const { runId, claimed } = await claimRun(tradingDate, universe.length);
@@ -476,7 +559,7 @@ export async function runDailyScreen(
 export async function claimScreenRun(
   universe: UniverseEntry[] = SCREEN_UNIVERSE,
 ): Promise<{ runId: number; tradingDate: string; claimed: boolean }> {
-  const tradingDate = currentTradingDate();
+  const tradingDate = await resolveTradingDate();
   const { runId, claimed } = await claimRun(tradingDate, universe.length);
   return { runId, tradingDate, claimed };
 }

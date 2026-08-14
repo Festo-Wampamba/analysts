@@ -17,10 +17,10 @@ reclaim window, and the test plan — is in
 [`docs/superpowers/specs/2026-08-05-async-screen-design.md`](superpowers/specs/2026-08-05-async-screen-design.md).
 This doc doesn't repeat it.
 
-There's a second, unrelated read path: `GET /api/daily-idea` and `/`
-(`app/page.tsx`) both read the latest persisted idea via
-`lib/screen/get-latest-idea.ts` — no auth, no triggering, just a display
-query.
+The read path is separate: `GET /api/daily-idea` and `/` both read the latest
+persisted idea via `lib/screen/get-latest-idea.ts`. The homepage then uses the
+latest qualifying ticker to assemble the full research workspace directly
+from the domain service; it does not make an internal HTTP request.
 
 ## Module boundaries
 
@@ -35,13 +35,18 @@ composite scores from per-factor sub-scores; `fetch.ts` pulls per-ticker
 candidate data from Finnhub; `trading-date.ts` resolves the current US
 trading date for idempotency.
 
-**`lib/source/`** — the Finnhub provider boundary. `finnhub.ts` is the single
+**`lib/source/`** — provider boundaries and durable normalized caches.
+`finnhub.ts` is the single
 choke point every market-data call goes through: it attaches the API key,
 retries via `lib/http/retry.ts`, validates the response against a Zod schema
 in `finnhub-schemas.ts`, and logs every call (success or failure) to the
 `source_calls` table via `log.ts`, tagged with `provider`, `endpoint`,
-`ticker`, `httpStatus`, `latencyMs`, and a `runId`/`reportId` linkage.
-Nothing outside this module talks to Finnhub directly.
+`ticker`, `httpStatus`, `latencyMs`, and a `runId`/`reportId`/`researchRunId`
+linkage.
+Nothing outside this module talks to Finnhub directly. `sec.ts` maps primary
+Company Facts into period-coherent annual financials; `alpha-vantage.ts`
+provides budgeted daily/weekly chart series; `cache.ts` stores normalized
+provider values in Postgres with provider-specific TTLs.
 
 **`lib/ai/`** — the Groq provider boundary. `groq.ts` is the equivalent
 choke point for narrative generation: one JSON-mode chat completion,
@@ -49,8 +54,9 @@ validated against a caller-supplied Zod schema, logged to `source_calls`
 with token usage in `meta`. `guards.ts` (`sanitizeSourceText`,
 `verifyNumericClaims`) enforces that every number in generated prose exists
 in an allowlist built from the sourced facts — a narrative that invents a
-figure is rejected and retried once with the offending values named, then
-fails the run rather than shipping an unverifiable claim. `report-schema.ts`
+figure is rejected and retried once with the offending values named. If the
+retry also fails, a deterministic prose fallback is published and labelled
+instead of weakening verification or losing the day's sourced result. `report-schema.ts`
 defines the Zod shapes for both narrative types (daily idea, research).
 
 **`lib/research/`** — the on-demand per-ticker report pipeline
@@ -62,7 +68,16 @@ distinguishes "unknown ticker" from "sources unavailable" by whether Finnhub
 returned an empty-but-200 quote with no company data. `facts.ts` shapes raw
 provider responses into the fact block and its numeric allowlist;
 `prompt.ts` builds the system/user prompts; `ticker.ts` validates ticker
-input.
+input. `workspace.ts` assembles report narrative, current quote, SEC
+financials, peer snapshots, earnings, charts, provenance, and partial-failure
+states for both the API and server-rendered UI.
+
+**`lib/http/`** — shared network reliability and abuse controls. Provider
+requests use bounded retry/timeout behavior; public ticker-report and chart
+requests use a fixed-window per-client limiter. The limiter is intentionally
+in memory because the current Dokploy deployment is a single long-lived app
+instance. It must move to a shared store before horizontally scaling the web
+service.
 
 **`lib/domain/`** — shared display-contract types with no provider or DB
 dependencies, referenced from `Final-design.md` §13. `provenance.ts` defines

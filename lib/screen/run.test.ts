@@ -147,6 +147,7 @@ import {
   getScreenStatus,
   runDailyScreen,
   runScreenInBackground,
+  TOP_CANDIDATES,
 } from "./run";
 import type { UniverseEntry } from "./universe";
 
@@ -288,6 +289,35 @@ describe("runDailyScreen happy path", () => {
     mockHappyPath();
     await runDailyScreen(universe);
     expect(state.insertedCandidates.map((c) => c.ticker)).toEqual(["AAA", "BBB"]);
+  });
+
+  it("persists the top fifteen candidates in rank order when the universe is larger", async () => {
+    mockHappyPath();
+    const expandedUniverse = Array.from({ length: TOP_CANDIDATES + 1 }, (_, index) => ({
+      ticker: `T${String.fromCharCode(65 + index)}A`,
+      sector: "Technology",
+    }));
+    const expandedCandidates = Array.from({ length: TOP_CANDIDATES + 1 }, (_, index) => ({
+      ...candidates()[0],
+      ticker: expandedUniverse[index].ticker,
+      metrics: {
+        ...candidates()[0].metrics,
+        revenueGrowthTTMYoy: 100 - index,
+        epsGrowthTTMYoy: 100 - index,
+      },
+    }));
+    vi.mocked(fetchUniverseCandidates).mockResolvedValue({
+      candidates: expandedCandidates,
+      failedTickers: [],
+    });
+
+    const result = await runDailyScreen(expandedUniverse);
+
+    expect(result.topCandidates).toHaveLength(TOP_CANDIDATES);
+    expect(state.insertedCandidates).toHaveLength(TOP_CANDIDATES);
+    expect(state.insertedCandidates.map((candidate) => candidate.rank)).toEqual(
+      Array.from({ length: TOP_CANDIDATES }, (_, index) => index + 1),
+    );
   });
 
   it("stores the model's catalyst on the winning candidate row", async () => {
@@ -467,8 +497,9 @@ describe("runDailyScreen failure isolation", () => {
     });
   });
 
-  it("rejects an idea whose narrative invents a figure twice", async () => {
+  it("publishes a deterministic fallback when the narrative invents a figure twice", async () => {
     mockHappyPath();
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(groqJson).mockResolvedValue({
       data: { ...narrative, bullCase: "Revenue reaches $999.9 billion." },
       model: "llama-3.3-70b-versatile",
@@ -480,7 +511,74 @@ describe("runDailyScreen failure isolation", () => {
       },
     });
 
-    await expect(runDailyScreen(universe)).rejects.toThrow(/unverifiable figures/);
+    const result = await runDailyScreen(universe);
+
+    expect(result.status).toBe("complete");
+    expect(result.idea?.generated).toMatchObject({
+      status: "fallback",
+      modelLabel: "deterministic-safety-fallback",
+    });
+    expect(result.idea?.narrative.bullCase).not.toContain("999.9");
+  });
+
+  it("accepts a source metric rounded to the canonical display precision", async () => {
+    mockHappyPath();
+    const sourceCandidates = candidates();
+    sourceCandidates[0].metrics.analystBuyRatio = 0.062153;
+    vi.mocked(fetchUniverseCandidates).mockResolvedValue({
+      candidates: sourceCandidates,
+      failedTickers: [],
+    });
+    vi.mocked(groqJson).mockResolvedValue({
+      data: { ...narrative, selectionReason: "Analyst support measured 0.0622 in the sourced snapshot." },
+      model: "llama-3.3-70b-versatile",
+      usage: { promptTokens: 800, completionTokens: 200, totalTokens: 1000 },
+      meta: {
+        generatedAt: new Date().toISOString(),
+        basedOn: ["screen"],
+        modelLabel: "llama-3.3-70b-versatile",
+      },
+    });
+
+    const result = await runDailyScreen(universe);
+
+    expect(result.idea?.generated.status).not.toBe("fallback");
+    expect(groqJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops company-news rows that are not related to the winning ticker", async () => {
+    mockHappyPath();
+    vi.mocked(getCompanyNews).mockResolvedValue(
+      sourced(
+        [
+          {
+            id: 1,
+            datetime: 1_754_332_800,
+            headline: "Relevant update",
+            source: "Wire",
+            summary: "",
+            url: "https://example.com/relevant",
+            related: "AAA",
+          },
+          {
+            id: 2,
+            datetime: 1_754_332_800,
+            headline: "Unrelated update",
+            source: "Wire",
+            summary: "",
+            url: "https://example.com/unrelated",
+            related: "BBB",
+          },
+        ],
+        "/company-news",
+      ),
+    );
+
+    const result = await runDailyScreen(universe);
+
+    expect(result.idea?.facts.news?.map((item) => item.headline)).toEqual([
+      "Relevant update",
+    ]);
   });
 });
 

@@ -54,7 +54,7 @@ import {
   getQuote,
   getRecommendations,
 } from "@/lib/source/finnhub";
-import { getResearchReport, ReportError } from "./report";
+import { getResearchReport } from "./report";
 
 function sourced<T>(data: T, endpoint: string) {
   return {
@@ -165,6 +165,24 @@ describe("getResearchReport cache", () => {
 
     expect(report.cached).toBe(true);
     expect(getQuote).not.toHaveBeenCalled();
+  });
+
+  it("preserves the fallback label when reading a deterministic cached report", async () => {
+    cacheRows.push({
+      ticker: "AAPL",
+      facts: {
+        facts: { ticker: "AAPL", company: { name: "Apple Inc" } },
+        provenance: [],
+        failedProviders: [],
+      },
+      narrative: narrative(),
+      model: "deterministic-safety-fallback",
+      generatedAt: new Date(),
+    });
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
   });
 
   it("marks a cached quote's provenance stale once it ages past the freshness window", async () => {
@@ -322,23 +340,29 @@ describe("getResearchReport numeric guard", () => {
     expect(retryPrompt).toContain("394.3 billion");
   });
 
-  it("fails the report when the retry still invents a figure", async () => {
+  it("returns a deterministic fallback when the retry still invents a figure", async () => {
     mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(groqJson).mockResolvedValue(
       mockGeneration(narrative({ thesis: "Revenue will hit $394.3 billion." })),
     );
 
-    await expect(getResearchReport("AAPL")).rejects.toBeInstanceOf(ReportError);
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+    expect(report.narrative.thesis).not.toContain("394.3");
   });
 
-  it("does not cache a report that failed the numeric guard", async () => {
+  it("caches the safe fallback after numeric verification fails", async () => {
     mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(groqJson).mockResolvedValue(
       mockGeneration(narrative({ thesis: "Revenue will hit $394.3 billion." })),
     );
 
-    await getResearchReport("AAPL").catch(() => {});
+    await getResearchReport("AAPL");
 
-    expect(insertedReports).toHaveLength(0);
+    expect(insertedReports).toHaveLength(1);
+    expect(insertedReports[0].model).toBe("deterministic-safety-fallback");
   });
 });
