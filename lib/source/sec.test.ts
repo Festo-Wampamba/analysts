@@ -16,6 +16,12 @@ describe("normalizeCompanyFacts", () => {
           RevenueFromContractWithCustomerExcludingAssessedTax: {
             units: { USD: [fact(90, "2024-09-28", "2024-11-01", "old"), fact(100, "2025-09-27", "2025-10-31", "new")] },
           },
+          // SEC taxonomy metadata may use null labels for facts that are not
+          // part of the financial snapshot we consume.
+          EffectiveIncomeTaxRateReconciliationFdiiAmount: {
+            label: null,
+            units: { USD: [] },
+          },
           NetCashProvidedByUsedInOperatingActivities: {
             units: { USD: [fact(25, "2024-09-28", "2024-11-01", "old"), fact(30, "2025-09-27", "2025-10-31", "new")] },
           },

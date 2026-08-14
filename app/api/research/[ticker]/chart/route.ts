@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 
 import { consumeRateLimit, requestIdentifier } from "@/lib/http/rate-limit";
 import { isValidTicker, normalizeTicker } from "@/lib/research/ticker";
-import { getChartSeries, type ChartRange } from "@/lib/source/alpha-vantage";
+import { getChartSeries, type ChartRange } from "@/lib/source/chart";
 
 export const dynamic = "force-dynamic";
 
-const ranges = new Set<ChartRange>(["7d", "1m", "1y"]);
+const ranges = new Set<ChartRange>(["1d", "5d", "1m", "1y"]);
 
 export async function GET(
   request: Request,
@@ -20,7 +20,7 @@ export async function GET(
   }
   if (!range || !ranges.has(range)) {
     return NextResponse.json(
-      { error: "invalid_range", message: "Range must be 7d, 1m, or 1y." },
+      { error: "invalid_range", message: "Range must be 1d, 5d, 1m, or 1y." },
       { status: 400 },
     );
   }
@@ -33,7 +33,10 @@ export async function GET(
   }
   try {
     const result = await getChartSeries(ticker, range);
-    return NextResponse.json({ ...result.data, provenance: result.provenance, cached: result.cached });
+    return NextResponse.json(
+      { ...result.data, provenance: result.provenance, cached: result.cached },
+      { headers: { "Cache-Control": "private, max-age=60" } },
+    );
   } catch (error) {
     return NextResponse.json(
       { error: "chart_unavailable", message: (error as Error).message },

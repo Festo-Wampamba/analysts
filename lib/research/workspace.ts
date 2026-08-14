@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 
 import { db, schema } from "@/lib/db";
 import type { Provenance } from "@/lib/domain/provenance";
-import { getChartSeries, type ChartSeries } from "@/lib/source/alpha-vantage";
+import { getChartSeries, type ChartSeries } from "@/lib/source/chart";
 import {
   getCachedEarnings,
   getCachedMetrics,
@@ -134,6 +134,20 @@ async function loadPeer(
   return { peer, provenance };
 }
 
+async function loadInitialChart(
+  ticker: string,
+  context: { researchRunId?: number },
+): Promise<Awaited<ReturnType<typeof getChartSeries>>> {
+  try {
+    return await getChartSeries(ticker, "1d", context);
+  } catch (error) {
+    // Keep the research page usable if the provider cannot supply an intraday
+    // series, while retaining the actual provider failure for observability.
+    console.warn("initial intraday chart unavailable; falling back to five days:", (error as Error).message);
+    return getChartSeries(ticker, "5d", context);
+  }
+}
+
 async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace> {
   const symbol = ticker.toUpperCase();
   const researchRunId = await startRun(symbol);
@@ -146,9 +160,9 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
     const financialPromise = process.env.SEC_USER_AGENT
       ? getFinancialSnapshot(symbol, context)
       : Promise.reject(new Error("SEC_USER_AGENT is not configured"));
-    const chartPromise = process.env.ALPHA_VANTAGE_API_KEY
-      ? getChartSeries(symbol, "1m", context)
-      : Promise.reject(new Error("ALPHA_VANTAGE_API_KEY is not configured"));
+    const chartPromise = process.env.TWELVE_DATA_API_KEY || process.env.ALPHA_VANTAGE_API_KEY
+      ? loadInitialChart(symbol, context)
+      : Promise.reject(new Error("No chart provider is configured"));
     const earningsPromise = getCachedEarnings(
       symbol,
       isoDateOffset(-1),

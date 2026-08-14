@@ -175,7 +175,7 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
             <div className="quote-card"><FactLabel>Finnhub · Quote</FactLabel><div className="quote-line"><strong>{formatMoney(quotePrice, currency)}</strong>{quoteChange !== undefined && <span className={quoteChange >= 0 ? "trend-up" : "trend-down"}>{quoteChange >= 0 ? "▲" : "▼"} {Math.abs(quoteChange).toFixed(2)}%</span>}</div><small>As of {formatEt(primaryQuote?.quoteAsOf)} · prev close {formatMoney(primaryQuote?.previousClose ?? facts.quote?.previousClose, currency)}</small></div>
             <Panel className="read-card"><span className="read-card__title">How to read this report</span><span><SearchIcon className="chip-icon" />Provider icon — sourced fact with a named provider</span><span><SparkIcon className="chip-icon" />Spark icon — generated or deterministic narrative</span></Panel>
           </div>
-          <PriceChart ticker={facts.ticker} initial={chart} />
+          <PriceChart ticker={facts.ticker} currency={currency} initial={chart} />
         </header>
 
         <section className="report-section" id="overview"><SectionHeading id="overview" number="01" title="Overview" /><MetricPanel label="Finnhub · Company profile" metrics={overviewMetrics} /><AiPanel fallback={fallback}><p>{narrative.overview}</p><p>{narrative.businessModel}</p></AiPanel></section>

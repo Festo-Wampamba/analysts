@@ -10,10 +10,11 @@ import { recordSourceCall } from "./log";
 const PROVIDER = "alpha-vantage";
 const ENDPOINT = "https://www.alphavantage.co/query";
 const TIMEOUT_MS = 15_000;
+const INTRADAY_TTL_MS = 5 * 60 * 1000;
 const DAILY_TTL_MS = 24 * 60 * 60 * 1000;
 const WEEKLY_TTL_MS = 7 * DAILY_TTL_MS;
 
-export type ChartRange = "7d" | "1m" | "1y";
+export type ChartRange = "1d" | "5d" | "1m" | "1y";
 export type ChartPoint = { timestamp: string; close: number };
 export type ChartSeries = {
   ticker: string;
@@ -24,6 +25,46 @@ export type ChartSeries = {
 type StoredChartSeries = Omit<ChartSeries, "range">;
 
 const rowSchema = z.object({ "4. close": z.string() });
+
+function easternTimestampToUtc(timestamp: string): string {
+  if (!timestamp.includes(" ")) return `${timestamp}T00:00:00.000Z`;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(timestamp);
+  if (!match) throw new Error("unrecognised intraday timestamp");
+  const [, year, month, day, hour, minute, second] = match;
+  const wallClock = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date(wallClock)).flatMap((part) =>
+      part.type === "literal" ? [] : [[part.type, part.value]],
+    ),
+  );
+  const observedWallClock = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  const utc = wallClock - (observedWallClock - wallClock);
+  return new Date(utc).toISOString();
+}
+
+function providerTimestamp(timestamp: string, range: ChartRange): string {
+  return range === "1d"
+    ? easternTimestampToUtc(timestamp)
+    : easternTimestampToUtc(`${timestamp} 16:00:00`);
+}
 
 export function normalizeTimeSeries(
   ticker: string,
@@ -38,7 +79,7 @@ export function normalizeTimeSeries(
   }
   const rows = z.record(z.string(), rowSchema).parse(payload[seriesKey]);
   const sorted = Object.entries(rows)
-    .map(([timestamp, row]) => ({ timestamp, close: Number(row["4. close"]) }))
+    .map(([timestamp, row]) => ({ timestamp: providerTimestamp(timestamp, range), close: Number(row["4. close"]) }))
     .filter((point) => Number.isFinite(point.close))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   const points = selectPoints(sorted, range);
@@ -47,14 +88,25 @@ export function normalizeTimeSeries(
 }
 
 function selectPoints(points: ChartPoint[], range: ChartRange): ChartPoint[] {
-  const desired = range === "7d" ? 7 : range === "1m" ? 23 : 53;
+  if (range === "1d") return points;
+  const desired = range === "5d" ? 5 : range === "1m" ? 23 : 53;
   return points.slice(-desired);
 }
 
 function asRange(stored: StoredChartSeries, range: ChartRange): ChartSeries {
-  const points = selectPoints(stored.points, range);
+  const points = selectPoints(
+    stored.points.map((point) => ({
+      ...point,
+      // Older daily cache rows used bare YYYY-MM-DD strings. Keep them
+      // readable while those rows naturally expire after deployment.
+      timestamp: point.timestamp.includes("T")
+        ? point.timestamp
+        : easternTimestampToUtc(`${point.timestamp} 16:00:00`),
+    })),
+    range,
+  );
   if (points.length < 2) throw new Error("not enough price history");
-  return { ...stored, range, points };
+  return { ...stored, range, points, asOf: points.at(-1)!.timestamp };
 }
 
 async function callsToday(): Promise<number> {
@@ -82,7 +134,7 @@ export async function getChartSeries(
   ctx: { researchRunId?: number } = {},
 ): Promise<{ data: ChartSeries; provenance: Provenance; cached: boolean }> {
   const symbol = ticker.toUpperCase();
-  const kind = range === "1y" ? "weekly-series" : "daily-series";
+  const kind = range === "1d" ? "intraday-5min" : range === "1y" ? "weekly-series" : "daily-series";
   const cacheKey = { provider: PROVIDER, kind, ticker: symbol };
   const cached = await readProviderCache<StoredChartSeries>(cacheKey);
   if (cached) return { ...cached, data: asRange(cached.data, range) };
@@ -92,11 +144,16 @@ export async function getChartSeries(
   const budget = Number(process.env.ALPHA_VANTAGE_DAILY_BUDGET ?? "20");
   if ((await callsToday()) >= budget) throw new Error("daily chart provider budget exhausted");
 
-  const functionName = range === "1y" ? "TIME_SERIES_WEEKLY" : "TIME_SERIES_DAILY";
+  const functionName = range === "1d"
+    ? "TIME_SERIES_INTRADAY"
+    : range === "1y"
+      ? "TIME_SERIES_WEEKLY"
+      : "TIME_SERIES_DAILY";
   const url = new URL(ENDPOINT);
   url.searchParams.set("function", functionName);
   url.searchParams.set("symbol", symbol);
   url.searchParams.set("apikey", apiKey);
+  if (range === "1d") url.searchParams.set("interval", "5min");
   if (range !== "1y") url.searchParams.set("outputsize", "compact");
   const fetchedAt = new Date();
   const started = performance.now();
@@ -140,7 +197,7 @@ export async function getChartSeries(
     endpoint: functionName,
     ticker: symbol,
     httpStatus: response.status,
-    providerTimestamp: new Date(`${data.asOf}T00:00:00Z`),
+    providerTimestamp: new Date(data.asOf),
     fetchedAt,
     latencyMs: Math.round(performance.now() - started),
     status: "fresh",
@@ -150,13 +207,13 @@ export async function getChartSeries(
   const seriesKey = Object.keys(payload).find((key) => key.includes("Time Series"))!;
   const rows = z.record(z.string(), rowSchema).parse(payload[seriesKey]);
   const allPoints = Object.entries(rows)
-    .map(([timestamp, row]) => ({ timestamp, close: Number(row["4. close"]) }))
+    .map(([timestamp, row]) => ({ timestamp: providerTimestamp(timestamp, range), close: Number(row["4. close"]) }))
     .filter((point) => Number.isFinite(point.close))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   await writeProviderCache(cacheKey, { ticker: symbol, points: allPoints, asOf: data.asOf }, {
     fetchedAt,
-    expiresAt: new Date(fetchedAt.getTime() + (range === "1y" ? WEEKLY_TTL_MS : DAILY_TTL_MS)),
-    providerTimestamp: new Date(`${data.asOf}T00:00:00Z`),
+    expiresAt: new Date(fetchedAt.getTime() + (range === "1d" ? INTRADAY_TTL_MS : range === "1y" ? WEEKLY_TTL_MS : DAILY_TTL_MS)),
+    providerTimestamp: new Date(data.asOf),
   });
   return {
     data,
@@ -165,7 +222,7 @@ export async function getChartSeries(
       provider: PROVIDER,
       endpoint: functionName,
       fetchedAt: fetchedAt.toISOString(),
-      providerTimestamp: new Date(`${data.asOf}T00:00:00Z`).toISOString(),
+      providerTimestamp: data.asOf,
       status: "fresh",
       httpStatus: response.status,
     },

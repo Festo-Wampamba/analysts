@@ -38,7 +38,8 @@ Authoritative list — from `grep -rhoE "process\.env\.[A-Z_]+" lib/ app/`:
 | `DATABASE_URL` | yes | Postgres connection string (Drizzle ORM). The example uses `localhost:5433`; production and development use their intended Neon database URLs. |
 | `FINNHUB_API_KEY` | yes | Market data provider (`lib/source/finnhub.ts`) — quotes, profiles, metrics, peers, relevant news, calendars, insider transactions, and recommendations. |
 | `SEC_USER_AGENT` | yes† | Identifying app/contact string required for server-side SEC Company Facts requests. |
-| `ALPHA_VANTAGE_API_KEY` | no | Enables cached daily and weekly historical charts. Reports degrade cleanly without it. |
+| `TWELVE_DATA_API_KEY` | no | Primary cached chart provider — 5-minute 1D bars, hourly 5D bars, and longer historical views. |
+| `ALPHA_VANTAGE_API_KEY` | no | Optional fallback for daily and weekly historical charts when its API entitlement permits it. |
 | `ALPHA_VANTAGE_DAILY_BUDGET` | no | Application-side request ceiling; defaults to `20`. |
 | `GROQ_API_KEY` | yes | LLM narrative generation (`lib/ai/groq.ts`). |
 | `GROQ_MODEL` | no | Overrides the Groq model; defaults to `llama-3.3-70b-versatile`. |

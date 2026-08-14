@@ -69,7 +69,9 @@ const companyFactsSchema = z.object({
     "us-gaap": z.record(
       z.string(),
       z.object({
-        label: z.string().optional(),
+        // SEC returns null for labels on some taxonomy facts. Labels are
+        // metadata only; financial selection uses tags and units instead.
+        label: z.string().nullable().optional(),
         units: z.record(z.string(), z.array(factEntrySchema)),
       }),
     ),
