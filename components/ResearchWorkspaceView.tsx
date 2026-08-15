@@ -210,5 +210,5 @@ function SourceRow({ source }: { source: Provenance }) {
 }
 
 export function AmbientLayer() {
-  return <div className="ambient-layer" aria-hidden="true"><span className="ambient-orb ambient-orb--one" /><span className="ambient-orb ambient-orb--two" /></div>;
+  return <div className="ambient-layer" aria-hidden="true"><span className="ambient-grid" /><span className="ambient-orb ambient-orb--one" /><span className="ambient-orb ambient-orb--two" /><span className="ambient-orb ambient-orb--three" /></div>;
 }

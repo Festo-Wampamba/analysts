@@ -234,7 +234,7 @@ export function PriceChart({
                 <text className="chart-tooltip__date" x="8" y="29">{formatTooltipTime(activePoint.timestamp)}</text>
               </g>
             </g>
-          ) : <circle className="chart-point" cx={geometry.last.x} cy={geometry.last.y} r="4" />}
+          ) : null}
           {axisLabels(series).map((label) => <text className="chart-axis-label" key={`${label.x}-${label.value}`} x={label.x} y="142" textAnchor={label.anchor}>{label.value}</text>)}
         </svg>
       ) : (

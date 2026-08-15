@@ -54,12 +54,12 @@ afterEach(() => {
 });
 
 describe("CandidateCarousel", () => {
-  it("rotates to the next sourced candidate after one minute", () => {
+  it("rotates to the next sourced candidate after five seconds", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     expect(screen.getByText("Ranked research queue (2)")).toBeInTheDocument();
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
-    act(() => vi.advanceTimersByTime(60_000));
+    act(() => vi.advanceTimersByTime(5_000));
 
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
   });
@@ -70,7 +70,7 @@ describe("CandidateCarousel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show next candidate" }));
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     fireEvent.click(screen.getByRole("button", { name: "Pause rotation" }));
-    act(() => vi.advanceTimersByTime(60_000));
+    act(() => vi.advanceTimersByTime(5_000));
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     fireEvent.click(screen.getByRole("button", { name: "Show previous candidate" }));
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
@@ -80,7 +80,7 @@ describe("CandidateCarousel", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
     await flushResearchRequest();
 
-    act(() => vi.advanceTimersByTime(60_000));
+    act(() => vi.advanceTimersByTime(5_000));
 
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     expect(screen.getByText("Auto rotation highlighted GOOGL. Select it to load its sourced research; the preview below remains NVDA.")).toBeInTheDocument();
@@ -107,7 +107,8 @@ describe("CandidateCarousel", () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
 
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+    fireEvent.click(screen.getByRole("button", { name: "Show GOOGL, ranked 2" }));
     expect(screen.getByText("Updated growth evidence")).toBeInTheDocument();
   });
 

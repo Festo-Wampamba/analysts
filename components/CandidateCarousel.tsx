@@ -8,6 +8,8 @@ import type { LatestIdea } from "@/lib/screen/get-latest-idea";
 
 type Candidate = LatestIdea["candidates"][number];
 
+const ROTATION_SECONDS = 5;
+
 function initialIndex(candidates: Candidate[], ticker?: string | null): number {
   const matching = ticker
     ? candidates.findIndex((candidate) => candidate.ticker === ticker)
@@ -31,13 +33,13 @@ export function CandidateCarousel({
   const [candidates, setCandidates] = useState(initialCandidates);
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
   const [paused, setPaused] = useState(false);
-  const [secondsRemaining, setSecondsRemaining] = useState(60);
+  const [secondsRemaining, setSecondsRemaining] = useState(ROTATION_SECONDS);
   const [researchTicker, setResearchTicker] = useState<string | null>(initialTicker ?? initialCandidates[0]?.ticker ?? null);
   const trackRef = useRef<HTMLDivElement>(null);
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
   const canRotate = candidates.length > 1;
-  const rotationProgress = `${Math.round(((60 - secondsRemaining) / 60) * 100)}%`;
+  const rotationProgress = `${Math.round(((ROTATION_SECONDS - secondsRemaining) / ROTATION_SECONDS) * 100)}%`;
 
   useEffect(() => {
     selectedTickerRef.current = selected?.ticker;
@@ -49,7 +51,7 @@ export function CandidateCarousel({
       setSecondsRemaining((remaining) => {
         if (remaining > 1) return remaining - 1;
         setSelectedIndex((current) => (current + 1) % candidates.length);
-        return 60;
+        return ROTATION_SECONDS;
       });
     }, 1_000);
     return () => window.clearInterval(timer);
@@ -98,7 +100,7 @@ export function CandidateCarousel({
     const nextIndex = (index + candidates.length) % candidates.length;
     setSelectedIndex(nextIndex);
     if (loadResearch) setResearchTicker(candidates[nextIndex]?.ticker ?? null);
-    setSecondsRemaining(60);
+    setSecondsRemaining(ROTATION_SECONDS);
   }
 
   return (

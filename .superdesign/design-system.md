@@ -11,6 +11,9 @@ The root screen is a long-form equity research workspace based on `Designs/Final
 - Display: Space Grotesk. Body/UI: IBM Plex Sans. Data, labels, timestamps: IBM Plex Mono.
 - Shape: 15px cards, 18px navigation and chart surfaces, 26px hero/pick surfaces, pill controls.
 - Shadow: `0 24px 80px rgba(0,0,0,.34)` with a subtle inset top highlight.
+- Readability: body and decision-support copy are at least 16px with a 1.55–1.65 line height; table and form values are 14–15px; compact provenance labels may be smaller but never carry the main message.
+- Layout: primary content uses a 1320px maximum width, 48px desktop gutters, a 196px report index, and consistent 18–20px inner panel padding. Related panels share left and right edges rather than drifting independently.
+- Motion: ambient light, grid drift, and surface depth use slow transform/opacity-only animation in the existing blue-gray palette. Motion remains decorative, never moves content, and is disabled for `prefers-reduced-motion`.
 
 ## Information architecture
 
@@ -25,6 +28,7 @@ Topbar → Research report shell → sticky report navigation → AAPL hero/char
 - Tables preserve explicit columns on desktop and collapse to readable ticker/catalyst/confidence rows on mobile.
 - The report index becomes a horizontal, scrollable anchor bar below 1023px.
 - Research and Daily Idea are separate anchors in the topbar, but remain one scrollable page until routing/backend wiring is introduced.
+- Price charts do not show a permanent terminal dot. A crosshair, temporary point, current value, and full day/date/time appear only when the user hovers or navigates the chart.
 
 ## Source of truth
 
