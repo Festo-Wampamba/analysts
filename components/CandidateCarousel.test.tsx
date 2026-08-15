@@ -57,23 +57,23 @@ describe("CandidateCarousel", () => {
   it("rotates to the next sourced candidate after one minute", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
-    expect(screen.getByText("2 ranked candidates · select one to load its own live sourced research")).toBeInTheDocument();
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Ranked research queue (2)")).toBeInTheDocument();
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
     act(() => vi.advanceTimersByTime(60_000));
 
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
   });
 
   it("allows manual previous and next selection and pauses rotation", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Show next candidate" }));
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("GOOGL");
-    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
+    fireEvent.click(screen.getByRole("button", { name: "Pause rotation" }));
     act(() => vi.advanceTimersByTime(60_000));
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     fireEvent.click(screen.getByRole("button", { name: "Show previous candidate" }));
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
   });
 
   it("keeps sourced research on the last manual selection while the queue auto-rotates", async () => {
@@ -82,7 +82,7 @@ describe("CandidateCarousel", () => {
 
     act(() => vi.advanceTimersByTime(60_000));
 
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     expect(screen.getByText("Auto rotation highlighted GOOGL. Select it to load its sourced research; the preview below remains NVDA.")).toBeInTheDocument();
     expect(vi.mocked(fetch)).not.toHaveBeenCalledWith("/api/research/GOOGL", { cache: "no-store" });
   });
@@ -107,7 +107,7 @@ describe("CandidateCarousel", () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
 
-    expect(screen.getByText("Selected candidate").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     expect(screen.getByText("Updated growth evidence")).toBeInTheDocument();
   });
 

@@ -37,6 +37,7 @@ export function CandidateCarousel({
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
   const canRotate = candidates.length > 1;
+  const rotationProgress = `${Math.round(((60 - secondsRemaining) / 60) * 100)}%`;
 
   useEffect(() => {
     selectedTickerRef.current = selected?.ticker;
@@ -103,8 +104,9 @@ export function CandidateCarousel({
   return (
     <section className="candidate-carousel" aria-label="Screened candidate queue">
       <div className="candidate-carousel__head">
-        <div>
-          <span>Research queue</span>
+        <div className="candidate-carousel__queue-meta">
+          <span>Ranked research queue ({candidates.length})</span>
+          <i aria-hidden="true"><b style={{ width: rotationProgress }} /></i>
           <p aria-live="polite">
             {canRotate
               ? paused
@@ -112,7 +114,6 @@ export function CandidateCarousel({
                 : `Auto advance in ${formatSeconds(secondsRemaining)}`
               : "One ranked candidate"}
           </p>
-          <small>{candidates.length} ranked candidates · select one to load its own live sourced research</small>
         </div>
         <div className="candidate-carousel__controls">
           <button
@@ -121,7 +122,8 @@ export function CandidateCarousel({
             disabled={!canRotate}
             aria-label="Show previous candidate"
           >
-            Previous
+            <span aria-hidden="true">‹</span>
+            <span className="sr-only">Previous</span>
           </button>
           <button
             type="button"
@@ -129,7 +131,7 @@ export function CandidateCarousel({
             disabled={!canRotate}
             aria-pressed={paused}
           >
-            {paused ? "Resume" : "Pause"}
+            {paused ? "Resume rotation" : "Pause rotation"}
           </button>
           <button
             type="button"
@@ -137,7 +139,8 @@ export function CandidateCarousel({
             disabled={!canRotate}
             aria-label="Show next candidate"
           >
-            Next
+            <span aria-hidden="true">›</span>
+            <span className="sr-only">Next</span>
           </button>
         </div>
       </div>
@@ -152,23 +155,30 @@ export function CandidateCarousel({
             key={candidate.ticker}
             onClick={() => choose(index)}
           >
-            <span>#{String(candidate.rank).padStart(2, "0")}</span>
-            <strong>{candidate.ticker}</strong>
+            <div>
+              <strong>{candidate.ticker}</strong>
+              <b>{candidate.compositeScore.toFixed(2)}</b>
+            </div>
             <em>{candidate.sector ?? "Sector unavailable"}</em>
-            <b>{candidate.compositeScore.toFixed(2)}</b>
+            <span>Rank {candidate.rank}</span>
           </button>
         ))}
       </div>
       <div className="candidate-carousel__selection" aria-live="polite">
         <div>
-          <span>Selected candidate</span>
+          <span>Selected result</span>
           <strong>{selected.ticker}</strong>
           <p>{selected.catalyst ?? "Factor detail will be available in the sourced report."}</p>
         </div>
         <Link className="button" href={`/research/${selected.ticker}`}>
-          Open {selected.ticker} research
+          Open full sourced report
         </Link>
       </div>
+      {candidates.length < 20 && (
+        <p className="candidate-carousel__legacy-note" role="status">
+          This completed screen retained {candidates.length} ranked candidates. New screens retain the top 20.
+        </p>
+      )}
       {researchTicker && researchTicker !== selected.ticker && (
         <p className="candidate-carousel__auto-note" role="status">
           Auto rotation highlighted {selected.ticker}. Select it to load its sourced research; the preview below remains {researchTicker}.

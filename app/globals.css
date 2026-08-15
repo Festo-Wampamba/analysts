@@ -237,27 +237,35 @@ body::before {
 .button--primary:hover { background: #b7d5e9; box-shadow: 0 0 24px rgba(143,184,216,.35); }
 .daily-actions > span { color: #8b93a1; font-family: var(--font-ibm-plex-mono), monospace; font-size: .6875rem; }
 .daily-pick--empty { min-height: 340px; justify-content: center; }
-.candidate-carousel { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(145deg, rgba(25,31,41,.7), rgba(10,14,20,.54)); box-shadow: var(--shadow); backdrop-filter: blur(24px) saturate(118%); }
+.candidate-carousel { display: flex; flex-direction: column; gap: 16px; }
 .candidate-carousel__head, .candidate-carousel__controls, .candidate-carousel__selection { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.candidate-carousel__head > div:first-child > span, .candidate-carousel__selection span { color: var(--mint); font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .12em; text-transform: uppercase; }
-.candidate-carousel__head p { margin: 4px 0 0; color: #8b93a1; font-family: var(--font-ibm-plex-mono), monospace; font-size: .6875rem; }
-.candidate-carousel__head small { display: block; margin-top: 5px; color: #718079; font-size: .72rem; line-height: 1.4; }
-.candidate-carousel__controls button { height: 30px; padding: 0 9px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.035); color: #b7c0ca; cursor: pointer; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; }
+.candidate-carousel__queue-meta { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.candidate-carousel__queue-meta > span, .candidate-carousel__selection span { color: var(--mint); font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .12em; text-transform: uppercase; }
+.candidate-carousel__queue-meta > i { display: block; width: 96px; height: 2px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.08); }
+.candidate-carousel__queue-meta > i b { display: block; height: 100%; border-radius: inherit; background: var(--mint); transition: width .95s linear; }
+.candidate-carousel__queue-meta p { margin: 0; color: #8b93a1; font-family: var(--font-ibm-plex-mono), monospace; font-size: .6875rem; }
+.candidate-carousel__controls { gap: 8px; }
+.candidate-carousel__controls button { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; background: rgba(255,255,255,.025); color: #8b93a1; cursor: pointer; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; }
+.candidate-carousel__controls button:first-child, .candidate-carousel__controls button:last-child { font-family: var(--font-space-grotesk), sans-serif; font-size: 1.4rem; line-height: 1; }
+.candidate-carousel__controls button:nth-child(2) { border-color: transparent; background: transparent; }
 .candidate-carousel__controls button:hover:not(:disabled), .candidate-carousel__controls button[aria-pressed="true"] { border-color: rgba(143,184,216,.3); background: rgba(143,184,216,.1); color: #e7f1f8; }
 .candidate-carousel__controls button:disabled { cursor: not-allowed; opacity: .45; }
-.candidate-carousel__track { display: flex; gap: 10px; overflow-x: auto; padding: 2px 1px 8px; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: rgba(143,184,216,.35) transparent; }
-.candidate-carousel__track > button { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "rank ticker score" "sector sector sector"; flex: 0 0 185px; gap: 6px 9px; padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(5,9,14,.36); color: #8b93a1; cursor: pointer; scroll-snap-align: center; text-align: left; transition: border-color .18s, background .18s, transform .18s; }
-.candidate-carousel__track > button:hover, .candidate-carousel__track > button.is-selected { border-color: rgba(143,184,216,.42); background: rgba(143,184,216,.09); transform: translateY(-1px); }
-.candidate-carousel__track > button > span { grid-area: rank; color: #718079; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; }
-.candidate-carousel__track > button > strong { grid-area: ticker; color: #f4f4f5; font-family: var(--font-ibm-plex-mono), monospace; font-size: .9375rem; font-weight: 400; }
-.candidate-carousel__track > button > em { grid-area: sector; overflow: hidden; color: #8b93a1; font-size: .6875rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
-.candidate-carousel__track > button > b { grid-area: score; color: var(--positive); font-family: var(--font-ibm-plex-mono), monospace; font-size: .75rem; font-weight: 400; }
-.candidate-carousel__selection { min-height: 46px; padding-top: 2px; }
+.candidate-carousel__track { display: flex; gap: 16px; overflow-x: auto; padding: 2px 1px 5px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.candidate-carousel__track::-webkit-scrollbar { display: none; }
+.candidate-carousel__track > button { display: flex; flex: 0 0 240px; flex-direction: column; gap: 8px; min-height: 112px; padding: 16px; border: 1px solid transparent; border-radius: 15px; background: linear-gradient(145deg, rgba(25,31,41,.7), rgba(10,14,20,.54)); box-shadow: var(--shadow); color: #8b93a1; cursor: pointer; scroll-snap-align: center; text-align: left; transition: border-color .18s, background .18s, transform .18s; }
+.candidate-carousel__track > button:hover, .candidate-carousel__track > button.is-selected { border-color: var(--mint); background: rgba(143,184,216,.1); transform: translateY(-1px); }
+.candidate-carousel__track > button > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.candidate-carousel__track > button strong { color: #f4f4f5; font-family: var(--font-space-grotesk), sans-serif; font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
+.candidate-carousel__track > button em { overflow: hidden; color: #8b93a1; font-size: .75rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-carousel__track > button b { color: var(--positive); font-family: var(--font-ibm-plex-mono), monospace; font-size: .75rem; font-weight: 400; }
+.candidate-carousel__track > button > span { margin-top: auto; color: #718079; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .08em; text-transform: uppercase; }
+.candidate-carousel__selection { min-height: 46px; padding: 2px 2px 0; }
 .candidate-carousel__selection > div { min-width: 0; }
 .candidate-carousel__selection strong { display: inline-block; margin-left: 8px; color: #f4f4f5; font-family: var(--font-ibm-plex-mono), monospace; font-size: .9375rem; font-weight: 400; }
 .candidate-carousel__selection p { overflow: hidden; max-width: 760px; margin: 5px 0 0; color: #8b93a1; font-size: .8125rem; text-overflow: ellipsis; white-space: nowrap; }
 .candidate-carousel__selection .button { flex: 0 0 auto; height: 34px; padding: 0 14px; font-size: .75rem; }
 .candidate-carousel__auto-note { margin: -2px 0 0; color: #8b93a1; font-size: .75rem; line-height: 1.45; }
+.candidate-carousel__legacy-note { margin: -4px 0 0; color: #d6b878; font-family: var(--font-ibm-plex-mono), monospace; font-size: .6875rem; line-height: 1.5; }
 .candidate-research-preview { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; border: 1px solid rgba(143,184,216,.2); border-radius: 12px; background: rgba(5,9,14,.3); }
 .candidate-research-preview--error { border-color: rgba(239,68,68,.22); }
 .candidate-research-preview > p { margin: 0; color: #9ba7b5; font-size: .8125rem; line-height: 1.55; }
