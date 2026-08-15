@@ -45,6 +45,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("fetch", vi.fn(defaultFetch));
   Element.prototype.scrollIntoView = vi.fn();
+  HTMLElement.prototype.scrollTo = vi.fn();
 });
 
 afterEach(() => {
@@ -54,15 +55,17 @@ afterEach(() => {
 });
 
 describe("CandidateCarousel", () => {
-  it("keeps the initial candidate selected until the user navigates", () => {
+  it("auto-rotates candidates without scrolling the document", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     expect(screen.getByText("Ranked research queue (2)")).toBeInTheDocument();
-    expect(screen.getByText("Manual selection")).toBeInTheDocument();
+    expect(screen.getByText("Auto advance every 5 seconds")).toBeInTheDocument();
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
-    act(() => vi.advanceTimersByTime(30_000));
+    act(() => vi.advanceTimersByTime(5_000));
 
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(HTMLElement.prototype.scrollTo).toHaveBeenCalled();
   });
 
   it("allows manual previous and next selection", () => {
@@ -72,6 +75,16 @@ describe("CandidateCarousel", () => {
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     fireEvent.click(screen.getByRole("button", { name: "Show previous candidate" }));
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+  });
+
+  it("pauses automatic rotation without changing the active candidate", () => {
+    render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause rotation" }));
+    act(() => vi.advanceTimersByTime(5_000));
+
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Rotation paused")).toBeInTheDocument();
   });
 
   it("refreshes candidate facts even when the ranked ticker list is unchanged", async () => {

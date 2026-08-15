@@ -1,6 +1,7 @@
 import { PriceChart } from "@/components/PriceChart";
 import { LiveMarketStatus } from "@/components/LiveMarketStatus";
 import { LocalizedDateTime, dateTimeOptions } from "@/components/LocalizedDateTime";
+import { ReportNav } from "@/components/ReportNav";
 import { TickerSearch } from "@/components/TickerSearch";
 import Link from "next/link";
 import type { Provenance } from "@/lib/domain/provenance";
@@ -9,18 +10,6 @@ import type { ResearchWorkspace } from "@/lib/research/workspace";
 
 type Tone = "up" | "down" | "neutral";
 type Metric = { label: string; value: string; detail?: string; tone?: Tone };
-
-const sections = [
-  ["overview", "Overview"],
-  ["financials", "Financials"],
-  ["valuation", "Valuation"],
-  ["peers", "Peers"],
-  ["catalysts", "Catalysts"],
-  ["risks", "Risks"],
-  ["cases", "Bull / Base / Bear"],
-  ["thesis", "Thesis"],
-  ["sources", "Sources"],
-] as const;
 
 function SearchIcon({ className = "" }: { className?: string }) {
   return <svg className={className} aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>;
@@ -101,10 +90,6 @@ export function AppTopbar({
 
 export function AppFooter() {
   return <footer className="site-footer"><div><span>analysts.korestandard.com · sourced market and filing data</span><span>Research output, not investment advice. <Link href="/#methodology">Methodology</Link></span></div></footer>;
-}
-
-function ReportNav() {
-  return <aside className="report-nav" aria-label="Report sections"><div className="report-nav__label">Report sections</div>{sections.map(([id, title], index) => <a className={index === 0 ? "is-active" : ""} href={`#${id}`} key={id}>{title}</a>)}</aside>;
 }
 
 function MetricPanel({ label, metrics, className = "" }: { label: string; metrics: Metric[]; className?: string }) {

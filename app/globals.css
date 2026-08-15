@@ -249,10 +249,13 @@ body::before {
 .candidate-carousel__head, .candidate-carousel__controls, .candidate-carousel__selection { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .candidate-carousel__queue-meta { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .candidate-carousel__queue-meta > span, .candidate-carousel__selection span { color: var(--mint); font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .12em; text-transform: uppercase; }
+.candidate-carousel__queue-meta > i { display: block; width: 96px; height: 2px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.08); }
+.candidate-carousel__queue-meta > i b { display: block; height: 100%; border-radius: inherit; background: var(--mint); transition: width .95s linear; }
 .candidate-carousel__queue-meta p { margin: 0; color: #8b93a1; font-family: var(--font-ibm-plex-mono), monospace; font-size: .75rem; }
 .candidate-carousel__controls { gap: 8px; }
 .candidate-carousel__controls button { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; background: rgba(255,255,255,.025); color: #8b93a1; cursor: pointer; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; }
 .candidate-carousel__controls button:first-child, .candidate-carousel__controls button:last-child { font-family: var(--font-space-grotesk), sans-serif; font-size: 1.4rem; line-height: 1; }
+.candidate-carousel__controls button:nth-child(2) { border-color: transparent; background: transparent; }
 .candidate-carousel__controls button:hover:not(:disabled), .candidate-carousel__controls button[aria-pressed="true"] { border-color: rgba(143,184,216,.3); background: rgba(143,184,216,.1); color: #e7f1f8; }
 .candidate-carousel__controls button:disabled { cursor: not-allowed; opacity: .45; }
 .candidate-carousel__track { display: flex; gap: 16px; overflow-x: auto; padding: 2px 1px 5px; scroll-snap-type: x mandatory; scrollbar-width: none; }
@@ -269,6 +272,7 @@ body::before {
 .candidate-carousel__selection strong { display: inline-block; margin-left: 8px; color: #f4f4f5; font-family: var(--font-ibm-plex-mono), monospace; font-size: .9375rem; font-weight: 400; }
 .candidate-carousel__selection p { overflow: hidden; max-width: 760px; margin: 5px 0 0; color: #8b93a1; font-size: .9375rem; text-overflow: ellipsis; white-space: nowrap; }
 .candidate-carousel__selection .button { flex: 0 0 auto; height: 34px; padding: 0 14px; font-size: .75rem; }
+.candidate-carousel__auto-note { margin: -2px 0 0; color: #8b93a1; font-size: .75rem; line-height: 1.45; }
 .candidate-carousel__legacy-note { margin: -4px 0 0; color: #d6b878; font-family: var(--font-ibm-plex-mono), monospace; font-size: .6875rem; line-height: 1.5; }
 .candidate-research-preview { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; border: 1px solid rgba(143,184,216,.2); border-radius: 12px; background: rgba(5,9,14,.3); }
 .candidate-research-preview--error { border-color: rgba(239,68,68,.22); }
