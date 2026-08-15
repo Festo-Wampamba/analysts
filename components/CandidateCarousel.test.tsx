@@ -54,37 +54,24 @@ afterEach(() => {
 });
 
 describe("CandidateCarousel", () => {
-  it("rotates to the next sourced candidate after five seconds", () => {
+  it("keeps the initial candidate selected until the user navigates", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     expect(screen.getByText("Ranked research queue (2)")).toBeInTheDocument();
+    expect(screen.getByText("Manual selection")).toBeInTheDocument();
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
-    act(() => vi.advanceTimersByTime(5_000));
+    act(() => vi.advanceTimersByTime(30_000));
 
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
   });
 
-  it("allows manual previous and next selection and pauses rotation", () => {
+  it("allows manual previous and next selection", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Show next candidate" }));
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
-    fireEvent.click(screen.getByRole("button", { name: "Pause rotation" }));
-    act(() => vi.advanceTimersByTime(5_000));
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
     fireEvent.click(screen.getByRole("button", { name: "Show previous candidate" }));
     expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
-  });
-
-  it("keeps sourced research on the last manual selection while the queue auto-rotates", async () => {
-    render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
-    await flushResearchRequest();
-
-    act(() => vi.advanceTimersByTime(5_000));
-
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
-    expect(screen.getByText("Auto rotation highlighted GOOGL. Select it to load its sourced research; the preview below remains NVDA.")).toBeInTheDocument();
-    expect(vi.mocked(fetch)).not.toHaveBeenCalledWith("/api/research/GOOGL", { cache: "no-store" });
   });
 
   it("refreshes candidate facts even when the ranked ticker list is unchanged", async () => {

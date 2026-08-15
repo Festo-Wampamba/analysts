@@ -1,5 +1,6 @@
 import { PriceChart } from "@/components/PriceChart";
 import { LiveMarketStatus } from "@/components/LiveMarketStatus";
+import { LocalizedDateTime, dateTimeOptions } from "@/components/LocalizedDateTime";
 import { TickerSearch } from "@/components/TickerSearch";
 import Link from "next/link";
 import type { Provenance } from "@/lib/domain/provenance";
@@ -71,18 +72,6 @@ function changeDetail(value: FinancialValue | undefined): { detail: string; tone
     detail: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent).toFixed(1)}%`,
     tone: percent >= 0 ? "up" : "down",
   };
-}
-
-function formatEt(iso: string | undefined): string {
-  if (!iso) return "Unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(iso));
 }
 
 function SectionHeading({ id, number, title }: { id: string; number: string; title: string }) {
@@ -174,10 +163,10 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
       <ReportNav />
       <article className="report-column">
         <header className="research-hero">
-          <div className="hero-meta"><FactLabel>Ticker research</FactLabel><span>Generated {formatEt(generated.generatedAt)}{report.cached ? " · cached narrative" : ""}</span></div>
+          <div className="hero-meta"><FactLabel>Ticker research</FactLabel><span>Generated <LocalizedDateTime value={generated.generatedAt} options={dateTimeOptions} />{report.cached ? " · cached narrative" : ""}</span></div>
           <div className="hero-title-row"><h1>{facts.ticker}</h1><div><strong>{facts.company?.name ?? facts.ticker}</strong><span>{[facts.company?.exchange, facts.company?.industry, facts.company?.country].filter(Boolean).join(" · ") || "Company profile unavailable"}</span></div></div>
           <div className="hero-profile-grid">
-            <div className="quote-card"><FactLabel>Finnhub · Quote</FactLabel><div className="quote-line"><strong>{formatMoney(quotePrice, currency)}</strong>{quoteChange !== undefined && <span className={quoteChange >= 0 ? "trend-up" : "trend-down"}>{quoteChange >= 0 ? "▲" : "▼"} {Math.abs(quoteChange).toFixed(2)}%</span>}</div><small>As of {formatEt(primaryQuote?.quoteAsOf)} · prev close {formatMoney(primaryQuote?.previousClose ?? facts.quote?.previousClose, currency)}</small></div>
+            <div className="quote-card"><FactLabel>Finnhub · Quote</FactLabel><div className="quote-line"><strong>{formatMoney(quotePrice, currency)}</strong>{quoteChange !== undefined && <span className={quoteChange >= 0 ? "trend-up" : "trend-down"}>{quoteChange >= 0 ? "▲" : "▼"} {Math.abs(quoteChange).toFixed(2)}%</span>}</div><small>As of <LocalizedDateTime value={primaryQuote?.quoteAsOf} options={dateTimeOptions} /> · prev close {formatMoney(primaryQuote?.previousClose ?? facts.quote?.previousClose, currency)}</small></div>
             <Panel className="read-card"><span className="read-card__title">How to read this report</span><span><SearchIcon className="chip-icon" />Provider icon — sourced fact with a named provider</span><span><SparkIcon className="chip-icon" />Spark icon — generated or deterministic narrative</span></Panel>
           </div>
           <PriceChart ticker={facts.ticker} currency={currency} initial={chart} />
@@ -206,7 +195,7 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
 }
 
 function SourceRow({ source }: { source: Provenance }) {
-  return <div className={`source-row ${source.status === "failed" ? "is-failed" : ""}`}><span>{source.provider}</span><strong>{source.endpoint ?? "provider snapshot"}</strong><time>{formatEt(source.providerTimestamp ?? source.fetchedAt)}</time><b>{source.httpStatus ?? source.status}</b></div>;
+  return <div className={`source-row ${source.status === "failed" ? "is-failed" : ""}`}><span>{source.provider}</span><strong>{source.endpoint ?? "provider snapshot"}</strong><LocalizedDateTime value={source.providerTimestamp ?? source.fetchedAt} options={dateTimeOptions} /><b>{source.httpStatus ?? source.status}</b></div>;
 }
 
 export function AmbientLayer() {

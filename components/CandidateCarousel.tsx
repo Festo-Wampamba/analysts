@@ -8,19 +8,11 @@ import type { LatestIdea } from "@/lib/screen/get-latest-idea";
 
 type Candidate = LatestIdea["candidates"][number];
 
-const ROTATION_SECONDS = 5;
-
 function initialIndex(candidates: Candidate[], ticker?: string | null): number {
   const matching = ticker
     ? candidates.findIndex((candidate) => candidate.ticker === ticker)
     : -1;
   return matching >= 0 ? matching : 0;
-}
-
-function formatSeconds(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 export function CandidateCarousel({
@@ -32,30 +24,15 @@ export function CandidateCarousel({
 }) {
   const [candidates, setCandidates] = useState(initialCandidates);
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
-  const [paused, setPaused] = useState(false);
-  const [secondsRemaining, setSecondsRemaining] = useState(ROTATION_SECONDS);
   const [researchTicker, setResearchTicker] = useState<string | null>(initialTicker ?? initialCandidates[0]?.ticker ?? null);
   const trackRef = useRef<HTMLDivElement>(null);
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
-  const canRotate = candidates.length > 1;
-  const rotationProgress = `${Math.round(((ROTATION_SECONDS - secondsRemaining) / ROTATION_SECONDS) * 100)}%`;
+  const canNavigate = candidates.length > 1;
 
   useEffect(() => {
     selectedTickerRef.current = selected?.ticker;
   }, [selected?.ticker]);
-
-  useEffect(() => {
-    if (!canRotate || paused) return undefined;
-    const timer = window.setInterval(() => {
-      setSecondsRemaining((remaining) => {
-        if (remaining > 1) return remaining - 1;
-        setSelectedIndex((current) => (current + 1) % candidates.length);
-        return ROTATION_SECONDS;
-      });
-    }, 1_000);
-    return () => window.clearInterval(timer);
-  }, [canRotate, candidates.length, paused]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -100,7 +77,6 @@ export function CandidateCarousel({
     const nextIndex = (index + candidates.length) % candidates.length;
     setSelectedIndex(nextIndex);
     if (loadResearch) setResearchTicker(candidates[nextIndex]?.ticker ?? null);
-    setSecondsRemaining(ROTATION_SECONDS);
   }
 
   return (
@@ -108,20 +84,13 @@ export function CandidateCarousel({
       <div className="candidate-carousel__head">
         <div className="candidate-carousel__queue-meta">
           <span>Ranked research queue ({candidates.length})</span>
-          <i aria-hidden="true"><b style={{ width: rotationProgress }} /></i>
-          <p aria-live="polite">
-            {canRotate
-              ? paused
-                ? "Rotation paused"
-                : `Auto advance in ${formatSeconds(secondsRemaining)}`
-              : "One ranked candidate"}
-          </p>
+          <p>Manual selection</p>
         </div>
         <div className="candidate-carousel__controls">
           <button
             type="button"
             onClick={() => choose(selectedIndex - 1)}
-            disabled={!canRotate}
+            disabled={!canNavigate}
             aria-label="Show previous candidate"
           >
             <span aria-hidden="true">‹</span>
@@ -129,16 +98,8 @@ export function CandidateCarousel({
           </button>
           <button
             type="button"
-            onClick={() => setPaused((value) => !value)}
-            disabled={!canRotate}
-            aria-pressed={paused}
-          >
-            {paused ? "Resume rotation" : "Pause rotation"}
-          </button>
-          <button
-            type="button"
             onClick={() => choose(selectedIndex + 1)}
-            disabled={!canRotate}
+            disabled={!canNavigate}
             aria-label="Show next candidate"
           >
             <span aria-hidden="true">›</span>
@@ -179,11 +140,6 @@ export function CandidateCarousel({
       {candidates.length < 20 && (
         <p className="candidate-carousel__legacy-note" role="status">
           This completed screen retained {candidates.length} ranked candidates. New screens retain the top 20.
-        </p>
-      )}
-      {researchTicker && researchTicker !== selected.ticker && (
-        <p className="candidate-carousel__auto-note" role="status">
-          Auto rotation highlighted {selected.ticker}. Select it to load its sourced research; the preview below remains {researchTicker}.
         </p>
       )}
       {researchTicker && <CandidateResearchPreview ticker={researchTicker} />}

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
+
 type Preview = {
   ticker: string;
   companyName?: string;
@@ -70,22 +72,11 @@ function formatMoney(value: number | undefined, currency = "USD") {
   }).format(value);
 }
 
-function formatAsOf(value: string | undefined) {
-  if (!value) return "Provider time unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(value));
-}
-
 export function CandidateResearchPreview({ ticker }: { ticker: string }) {
   const cacheRef = useRef(new Map<string, Preview>());
   const [state, setState] = useState<PreviewState>({ status: "loading" });
+  const timeZone = useViewerTimeZone();
+  const formatAsOf = (value: string | undefined) => formatDateTime(value, timeZone, dateTimeOptions, "Provider time unavailable");
 
   useEffect(() => {
     const cached = cacheRef.current.get(ticker);

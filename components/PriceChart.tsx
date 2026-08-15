@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
 import { marketFreshness } from "@/lib/market/freshness";
 import type { ChartPoint, ChartRange, ChartSeries } from "@/lib/source/chart";
 
 type ChartState = ChartSeries | { error: string };
 
 const chartRanges: ChartRange[] = ["1d", "5d", "1m", "1y"];
-const EASTERN_TIME_ZONE = "America/New_York";
 const ONE_DAY_REFRESH_MS = 5 * 60 * 1000;
 
 function chartGeometry(points: ChartPoint[]) {
@@ -55,43 +55,13 @@ function formatPrice(value: number, currency: string): string {
   }).format(value);
 }
 
-function formatAsOf(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Provider time unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: EASTERN_TIME_ZONE,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function formatTooltipTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Provider time unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: EASTERN_TIME_ZONE,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function axisLabels(series: ChartSeries): { value: string; x: number; anchor: "start" | "middle" | "end" }[] {
+function axisLabels(series: ChartSeries, timeZone: string): { value: string; x: number; anchor: "start" | "middle" | "end" }[] {
   const points = series.points;
   const indexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
   return indexes.map((index, labelIndex) => {
     const date = new Date(points[index].timestamp);
     const value = new Intl.DateTimeFormat("en-US", {
-      timeZone: EASTERN_TIME_ZONE,
+      timeZone,
       month: series.range === "1y" ? "short" : "short",
       day: series.range === "1y" ? undefined : "numeric",
       year: series.range === "1y" ? "2-digit" : undefined,
@@ -122,6 +92,7 @@ export function PriceChart({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const timeZone = useViewerTimeZone();
   const series = "points" in state ? state : null;
   const geometry = series ? chartGeometry(series.points) : null;
   const activePoint = hoveredIndex === null || !series ? null : series.points[hoveredIndex];
@@ -132,6 +103,8 @@ export function PriceChart({
     ? ((latest.close - opening.close) / opening.close) * 100
     : null;
   const freshness = latest ? marketFreshness(series!.asOf) : null;
+  const formatAsOf = (value: string) => formatDateTime(value, timeZone, dateTimeOptions, "Provider time unavailable");
+  const formatTooltipTime = formatAsOf;
 
   const loadRange = useCallback(async (next: ChartRange, options: { force?: boolean } = {}) => {
     if (!options.force && next === range && series) return;
@@ -235,7 +208,7 @@ export function PriceChart({
               </g>
             </g>
           ) : null}
-          {axisLabels(series).map((label) => <text className="chart-axis-label" key={`${label.x}-${label.value}`} x={label.x} y="142" textAnchor={label.anchor}>{label.value}</text>)}
+          {axisLabels(series, timeZone).map((label) => <text className="chart-axis-label" key={`${label.x}-${label.value}`} x={label.x} y="142" textAnchor={label.anchor}>{label.value}</text>)}
         </svg>
       ) : (
         <div className="chart-unavailable" role="status">
