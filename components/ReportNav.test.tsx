@@ -42,7 +42,7 @@ describe("ReportNav", () => {
     render(<ReportNav />);
     const valuation = document.getElementById("valuation")!;
 
-    act(() => observerCallback?.([{ target: valuation, isIntersecting: true, boundingClientRect: { top: 120 } } as IntersectionObserverEntry], {} as IntersectionObserver));
+    act(() => observerCallback?.([{ target: valuation, isIntersecting: true, boundingClientRect: { top: 120 } } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
 
     expect(screen.getByRole("link", { name: "Valuation" })).toHaveClass("is-active");
   });

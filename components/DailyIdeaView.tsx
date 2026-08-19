@@ -1,5 +1,6 @@
 import { CopyThesisButton } from "@/components/CopyThesisButton";
 import { CandidateCarousel } from "@/components/CandidateCarousel";
+import type { CandidatePreview } from "@/components/CandidateResearchPreview";
 import { LocalizedDateTime, dateTimeOptions } from "@/components/LocalizedDateTime";
 import { FactLabel, Panel } from "@/components/ResearchWorkspaceView";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
@@ -38,22 +39,32 @@ function isStale(idea: LatestIdea): boolean {
   return now.getTime() - latest.getTime() > 3 * 86_400_000;
 }
 
-export function DailyIdeaView({ latest }: { latest: LatestIdea | null }) {
+export function DailyIdeaView({
+  latest,
+  livePreview,
+}: {
+  latest: LatestIdea | null;
+  livePreview?: CandidatePreview;
+}) {
   const attempt = latest?.latestAttempt;
   const idea = latest?.idea;
   const hasPick = !!(latest?.ticker && idea);
   const stale = latest ? isStale(latest) : false;
   const failedLatest = attempt?.status === "failed" && attempt.tradingDate !== latest?.tradingDate;
+  const matchingLivePreview = livePreview?.ticker === idea?.facts.ticker ? livePreview : undefined;
+  const displayedPrice = matchingLivePreview?.price ?? idea?.facts.price?.current;
+  const displayedChange = matchingLivePreview?.changePercent ?? idea?.facts.price?.changePercent;
+  const displayedCurrency = matchingLivePreview?.currency ?? idea?.facts.company?.currency;
 
   return (
     <main className="daily-layout" id="daily-idea">
       <header className="daily-header"><div className="hero-meta"><FactLabel tone="ai">Daily idea engine</FactLabel><span>{latest ? `${latest.tradingDate} · ${attempt?.status ?? latest.run?.status}` : "No completed screen"}</span></div><h1>Today&apos;s idea</h1>{stale && <p className="data-warning">The most recent publishable result is stale. The latest screen status is shown below.</p>}</header>
 
-      {latest?.candidates.length ? <CandidateCarousel candidates={latest.candidates} initialTicker={latest.ticker} /> : null}
+      {latest?.candidates.length ? <CandidateCarousel candidates={latest.candidates} initialTicker={latest.ticker} initialPreview={livePreview} /> : null}
 
       {hasPick ? (
         <section className="daily-pick">
-          <div className="daily-pick-grid"><div className="daily-pick-main"><FactLabel tone="ai">{idea.generated.status === "fallback" ? "Verified fallback" : "Today’s pick"}</FactLabel><div className="daily-title"><h2>{idea.facts.ticker}</h2><span>{idea.facts.company?.name ?? idea.facts.ticker}</span></div><div className="daily-tags"><span>{idea.facts.sector ?? "Sector unavailable"}</span><span>Rank 1 of {idea.facts.universeEvaluated}</span></div><div className="score-line"><span>Score</span><i><b style={{ width: `${Math.max(0, Math.min(1, idea.facts.compositeScore)) * 100}%` }} /></i><strong>{idea.facts.compositeScore.toFixed(2)}</strong></div></div><div className="daily-pick-side"><Panel className="quote-card"><FactLabel>Finnhub · Quote</FactLabel><div className="quote-line"><strong>{formatMoney(idea.facts.price?.current, idea.facts.company?.currency)}</strong>{idea.facts.price?.changePercent !== undefined && <span className={idea.facts.price.changePercent >= 0 ? "trend-up" : "trend-down"}>{idea.facts.price.changePercent >= 0 ? "▲" : "▼"} {Math.abs(idea.facts.price.changePercent).toFixed(2)}%</span>}</div></Panel><Panel className="metrics-card"><FactLabel>Screen · Strongest factors</FactLabel><div className="daily-metrics">{Object.entries(idea.facts.factorScores).filter((entry): entry is [string, number] => typeof entry[1] === "number").sort((a, b) => b[1] - a[1]).slice(0, 3).map(([factor, score]) => <div key={factor}><span>{factorLabels[factor] ?? factor}</span><strong>{score.toFixed(2)}</strong></div>)}</div></Panel></div></div>
+          <div className="daily-pick-grid"><div className="daily-pick-main"><FactLabel tone="ai">{idea.generated.status === "fallback" ? "Verified fallback" : "Today’s pick"}</FactLabel><div className="daily-title"><h2>{idea.facts.ticker}</h2><span>{idea.facts.company?.name ?? idea.facts.ticker}</span></div><div className="daily-tags"><span>{idea.facts.sector ?? "Sector unavailable"}</span><span>Rank 1 of {idea.facts.universeEvaluated}</span></div><div className="score-line"><span>Score</span><i><b style={{ width: `${Math.max(0, Math.min(1, idea.facts.compositeScore)) * 100}%` }} /></i><strong>{idea.facts.compositeScore.toFixed(2)}</strong></div></div><div className="daily-pick-side"><Panel className="quote-card"><FactLabel>Finnhub · {matchingLivePreview ? "Current quote" : "Screen-time quote"}</FactLabel><div className="quote-line"><strong>{formatMoney(displayedPrice, displayedCurrency)}</strong>{displayedChange !== undefined && <span className={displayedChange >= 0 ? "trend-up" : "trend-down"}>{displayedChange >= 0 ? "▲" : "▼"} {Math.abs(displayedChange).toFixed(2)}%</span>}</div>{matchingLivePreview?.asOf && <small>As of <LocalizedDateTime value={matchingLivePreview.asOf} options={dateTimeOptions} /></small>}{matchingLivePreview?.marketCapMillions !== undefined && <small>Market cap {formatMoney(matchingLivePreview.marketCapMillions * 1_000_000, displayedCurrency)}</small>}</Panel><Panel className="metrics-card"><FactLabel>Screen · Strongest factors</FactLabel><div className="daily-metrics">{Object.entries(idea.facts.factorScores).filter((entry): entry is [string, number] => typeof entry[1] === "number").sort((a, b) => b[1] - a[1]).slice(0, 3).map(([factor, score]) => <div key={factor}><span>{factorLabels[factor] ?? factor}</span><strong>{score.toFixed(2)}</strong></div>)}</div></Panel></div></div>
           <Panel className="daily-reason"><FactLabel tone="ai">{idea.generated.status === "fallback" ? "Verified fallback" : "AI-generated"} · Why it ranked first</FactLabel><p>{idea.narrative.selectionReason}</p></Panel>
           <div className="daily-actions"><a className="button button--primary" href={`/research/${idea.facts.ticker}`}>Open full report</a><CopyThesisButton text={[idea.narrative.selectionReason, ...idea.narrative.thesisPoints].join("\n")} /><span>Surfaced <LocalizedDateTime value={latest.run?.finishedAt} options={dateTimeOptions} /></span></div>
         </section>

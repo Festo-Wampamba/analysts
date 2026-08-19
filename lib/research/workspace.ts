@@ -236,16 +236,35 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
 }
 
 const activeWorkspaceBuilds = new Map<string, Promise<ResearchWorkspace>>();
+const completedWorkspaceBuilds = new Map<
+  string,
+  { value: ResearchWorkspace; expiresAt: number }
+>();
+const WORKSPACE_CACHE_TTL_MS = 60_000;
 
 export function getResearchWorkspace(ticker: string): Promise<ResearchWorkspace> {
   const symbol = ticker.toUpperCase();
+  const completed = completedWorkspaceBuilds.get(symbol);
+  if (completed && completed.expiresAt > Date.now()) {
+    return Promise.resolve(completed.value);
+  }
+  if (completed) completedWorkspaceBuilds.delete(symbol);
+
   const active = activeWorkspaceBuilds.get(symbol);
   if (active) return active;
-  const build = buildResearchWorkspace(symbol).finally(() => {
-    if (activeWorkspaceBuilds.get(symbol) === build) {
-      activeWorkspaceBuilds.delete(symbol);
-    }
-  });
+  const build = buildResearchWorkspace(symbol)
+    .then((value) => {
+      completedWorkspaceBuilds.set(symbol, {
+        value,
+        expiresAt: Date.now() + WORKSPACE_CACHE_TTL_MS,
+      });
+      return value;
+    })
+    .finally(() => {
+      if (activeWorkspaceBuilds.get(symbol) === build) {
+        activeWorkspaceBuilds.delete(symbol);
+      }
+    });
   activeWorkspaceBuilds.set(symbol, build);
   return build;
 }

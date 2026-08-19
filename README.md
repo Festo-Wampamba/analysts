@@ -69,6 +69,60 @@ pnpm db:generate  # drizzle-kit generate (schema → migration)
 pnpm db:migrate   # apply migrations (scripts/migrate.ts)
 ```
 
+## Stock-ranking methodology
+
+The daily screen compares a fixed 54-company, 9-sector US universe against
+itself on the same trading day. Each raw component is converted to a
+cross-sectional percentile rank; the result therefore means “stronger than
+the available alternatives today,” not an absolute investment rating.
+
+| Factor | Weight | Sourced components |
+|---|---:|---|
+| Growth | 20% | TTM revenue growth, TTM EPS growth |
+| Profitability | 20% | TTM net margin, TTM return on equity |
+| Valuation | 20% | positive P/E and P/S, lower is better |
+| Financial strength | 15% | debt/equity (lower is better), current ratio |
+| Momentum | 15% | 13-week and 26-week price returns |
+| Analyst sentiment | 5% | latest-period buy and strong-buy ratio |
+| Insider activity | 5% | net insider share change over the lookback window |
+
+Missing factors are not scored as zero. The composite is the weighted mean of
+available factor scores, with weights re-normalized over the available data;
+coverage remains a separate measure. A company qualifies only when its
+composite score is at least `0.65` and at least `0.60` of the configured
+factor weight has real data. Invalid negative valuation multiples are
+excluded. Ties resolve alphabetically by ticker, the top 20 results are
+retained for inspection, and the engine publishes no daily idea when no
+company clears both gates. The implementation is in `lib/screen/score.ts` and
+its behavior is covered by `lib/screen/score.test.ts`.
+
+The LLM does not rank stocks and cannot introduce a new candidate. It receives
+the selected company’s sourced fact block only after deterministic scoring,
+writes the narrative, and passes a numerical allow-list check. If generation
+or correction fails, the application uses a deterministic sourced fallback.
+
+## Cost estimate
+
+Planning assumptions as of August 2026, in USD:
+
+- Model: Groq `openai/gpt-oss-120b`, priced at $0.15 per million uncached
+  input tokens and $0.60 per million output tokens.
+- Typical report: 4,000 input tokens and 1,000 output tokens, estimated at
+  **$0.0012 per report**, or up to **$0.0024** when the numerical-verification
+  correction request also runs.
+- Monthly scenario: 22 scheduled daily ideas plus 100 manual reports (122
+  generations) costs about **$0.15/month** in normal LLM usage, or about
+  **$0.30/month** if every generation requires one correction.
+- Current low-volume stack: approximately **$6–$10/month total**, assuming a
+  small VPS and the free Neon and Resend tiers. Domain registration, taxes,
+  regional VPS price differences, and paid market-data upgrades are excluded.
+
+The arithmetic is executable in `lib/submission/costs.ts` and tested in
+`lib/submission/costs.test.ts`. Recheck provider rates before budgeting:
+[Groq pricing](https://groq.com/pricing),
+[Neon pricing](https://neon.com/pricing), and
+[Resend pricing](https://resend.com/pricing).
+
 ## Docs
 
 - [`docs/architecture.md`](docs/architecture.md) — module boundaries, request

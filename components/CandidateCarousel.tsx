@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { CandidateResearchPreview } from "@/components/CandidateResearchPreview";
+import {
+  CandidateResearchPreview,
+  type CandidatePreview,
+} from "@/components/CandidateResearchPreview";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
 
 type Candidate = LatestIdea["candidates"][number];
@@ -20,9 +23,11 @@ function initialIndex(candidates: Candidate[], ticker?: string | null): number {
 export function CandidateCarousel({
   candidates: initialCandidates,
   initialTicker,
+  initialPreview,
 }: {
   candidates: Candidate[];
   initialTicker?: string | null;
+  initialPreview?: CandidatePreview;
 }) {
   const [candidates, setCandidates] = useState(initialCandidates);
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
@@ -185,7 +190,7 @@ export function CandidateCarousel({
           Auto rotation highlighted {selected.ticker}. Select it to load its sourced research; the preview below remains {researchTicker}.
         </p>
       )}
-      {researchTicker && <CandidateResearchPreview ticker={researchTicker} />}
+      {researchTicker && <CandidateResearchPreview ticker={researchTicker} initial={initialPreview} />}
     </section>
   );
 }

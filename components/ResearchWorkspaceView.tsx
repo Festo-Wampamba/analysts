@@ -10,6 +10,7 @@ import type { ResearchWorkspace } from "@/lib/research/workspace";
 
 type Tone = "up" | "down" | "neutral";
 type Metric = { label: string; value: string; detail?: string; tone?: Tone };
+type SourceSummary = Provenance & { occurrences: number };
 
 function SearchIcon({ className = "" }: { className?: string }) {
   return <svg className={className} aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>;
@@ -100,6 +101,27 @@ function AiPanel({ children, fallback }: { children: React.ReactNode; fallback: 
   return <Panel className="ai-panel"><FactLabel tone="ai">{fallback ? "Verified fallback" : "AI-generated"}</FactLabel>{children}</Panel>;
 }
 
+export function summarizeProvenance(sources: Provenance[]): SourceSummary[] {
+  const grouped = new Map<string, SourceSummary>();
+  for (const source of sources) {
+    const key = [source.provider, source.endpoint ?? "provider snapshot", source.status].join("|");
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, { ...source, occurrences: 1 });
+      continue;
+    }
+    const existingTime = Date.parse(existing.providerTimestamp ?? existing.fetchedAt);
+    const sourceTime = Date.parse(source.providerTimestamp ?? source.fetchedAt);
+    grouped.set(key, {
+      ...(sourceTime > existingTime ? source : existing),
+      occurrences: existing.occurrences + 1,
+    });
+  }
+  return [...grouped.values()].sort((a, b) =>
+    a.provider.localeCompare(b.provider) || (a.endpoint ?? "").localeCompare(b.endpoint ?? ""),
+  );
+}
+
 export function ResearchWorkspaceView({ workspace, confidence }: { workspace: ResearchWorkspace; confidence?: number | null }) {
   const { report, financials, peers, earnings, chart, additionalProvenance, failedSections } = workspace;
   const { facts, narrative, generated } = report;
@@ -139,9 +161,11 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
     { label: "Dividend yield", value: formatMetric(facts.valuation?.dividendYieldPercent, "%") },
     { label: "Beta", value: formatMetric(facts.momentum?.beta) },
   ];
-  const provenance = [...report.provenance, ...additionalProvenance].filter(
+  const rawProvenance = [...report.provenance, ...additionalProvenance].filter(
     (item, index, all) => all.findIndex((candidate) => candidate.provider === item.provider && candidate.endpoint === item.endpoint && candidate.fetchedAt === item.fetchedAt) === index,
   );
+  const provenance = summarizeProvenance(rawProvenance);
+  const providerCount = new Set(provenance.map((source) => source.provider)).size;
 
   return (
     <main className="research-layout" id="research">
@@ -173,14 +197,14 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
 
         <section className="report-section" id="thesis"><SectionHeading id="thesis" number="08" title="Investment thesis" /><Panel className="thesis-panel"><div className="thesis-head"><FactLabel tone="ai">{fallback ? "Verified fallback" : "AI-generated"}</FactLabel>{confidence !== undefined && confidence !== null && <span>coverage confidence {confidence.toFixed(2)}</span>}</div>{confidence !== undefined && confidence !== null && <div className="confidence-bar"><span style={{ width: `${Math.max(0, Math.min(1, confidence)) * 100}%` }} /></div>}<p>{narrative.thesis}</p><small>Model: {generated.modelLabel ?? "unlabelled"} · sourced facts and generated prose remain separately identified</small></Panel></section>
 
-        <section className="report-section" id="sources"><SectionHeading id="sources" number="09" title="Sources" /><Panel className="sources-panel"><p className="sources-intro">Every sourced value traces to a provider call or cached provider snapshot. Times show when the source was fetched.</p><div className="source-list">{provenance.map((source, index) => <SourceRow source={source} key={`${source.provider}-${source.endpoint}-${index}`} />)}</div>{failedSections.length > 0 && <div className="failed-note"><span>Partial</span><p>{failedSections.map((failure) => `${failure.section}: ${failure.reason}`).join(" · ")}</p></div>}</Panel></section>
+        <section className="report-section" id="sources"><SectionHeading id="sources" number="09" title="Sources" /><Panel className="sources-panel"><p className="sources-intro">Every sourced value traces to a provider call or cached provider snapshot. The detailed audit ledger is collapsed to keep the report concise.</p><div className="source-summary" aria-label="Source coverage summary"><div><strong>{providerCount}</strong><span>providers</span></div><div><strong>{provenance.length}</strong><span>unique endpoints</span></div><div><strong>{rawProvenance.length}</strong><span>logged snapshots</span></div></div><details className="source-disclosure"><summary><span>View source audit ledger</span><small>provider · endpoint · viewer-local time · status</small></summary><div className="source-list">{provenance.map((source, index) => <SourceRow source={source} key={`${source.provider}-${source.endpoint}-${index}`} />)}</div></details>{failedSections.length > 0 && <div className="failed-note"><span>Partial</span><p>{failedSections.map((failure) => `${failure.section}: ${failure.reason}`).join(" · ")}</p></div>}</Panel></section>
       </article>
     </main>
   );
 }
 
-function SourceRow({ source }: { source: Provenance }) {
-  return <div className={`source-row ${source.status === "failed" ? "is-failed" : ""}`}><span>{source.provider}</span><strong>{source.endpoint ?? "provider snapshot"}</strong><LocalizedDateTime value={source.providerTimestamp ?? source.fetchedAt} options={dateTimeOptions} /><b>{source.httpStatus ?? source.status}</b></div>;
+function SourceRow({ source }: { source: SourceSummary }) {
+  return <div className={`source-row ${source.status === "failed" ? "is-failed" : ""}`}><span>{source.provider}</span><strong>{source.endpoint ?? "provider snapshot"}{source.occurrences > 1 ? ` · ${source.occurrences} snapshots` : ""}</strong><LocalizedDateTime value={source.providerTimestamp ?? source.fetchedAt} options={dateTimeOptions} /><b>{source.httpStatus ?? source.status}</b></div>;
 }
 
 export function AmbientLayer() {

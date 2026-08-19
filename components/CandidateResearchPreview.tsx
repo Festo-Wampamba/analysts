@@ -5,10 +5,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
 
-type Preview = {
+export type CandidatePreview = {
   ticker: string;
   companyName?: string;
   currency?: string;
+  marketCapMillions?: number;
   price?: number;
   changePercent?: number;
   asOf?: string;
@@ -19,13 +20,13 @@ type Preview = {
 
 type PreviewState =
   | { status: "loading" }
-  | { status: "ready"; data: Preview }
+  | { status: "ready"; data: CandidatePreview }
   | { status: "error"; message: string };
 
 type ResearchResponse = {
   ticker?: unknown;
   facts?: {
-    company?: { name?: unknown; currency?: unknown };
+    company?: { name?: unknown; currency?: unknown; marketCapMillions?: unknown };
   };
   narrative?: { thesis?: unknown };
   generated?: { generatedAt?: unknown; status?: unknown };
@@ -43,7 +44,7 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function parsePreview(payload: unknown, requestedTicker: string): Preview | null {
+function parsePreview(payload: unknown, requestedTicker: string): CandidatePreview | null {
   if (!payload || typeof payload !== "object") return null;
   const report = payload as ResearchResponse;
   const ticker = asString(report.ticker) ?? requestedTicker;
@@ -54,6 +55,7 @@ function parsePreview(payload: unknown, requestedTicker: string): Preview | null
     ticker,
     companyName: asString(report.facts?.company?.name),
     currency: asString(report.facts?.company?.currency),
+    marketCapMillions: asNumber(report.facts?.company?.marketCapMillions),
     price: asNumber(quote?.price),
     changePercent: asNumber(quote?.changePercent),
     asOf: asString(report.workspace?.chart?.asOf) ?? asString(quote?.quoteAsOf),
@@ -72,9 +74,19 @@ function formatMoney(value: number | undefined, currency = "USD") {
   }).format(value);
 }
 
-export function CandidateResearchPreview({ ticker }: { ticker: string }) {
-  const cacheRef = useRef(new Map<string, Preview>());
-  const [state, setState] = useState<PreviewState>({ status: "loading" });
+export function CandidateResearchPreview({
+  ticker,
+  initial,
+}: {
+  ticker: string;
+  initial?: CandidatePreview;
+}) {
+  const initialMatches = initial !== undefined && initial.ticker.toUpperCase() === ticker.toUpperCase();
+  const initialEntries: [string, CandidatePreview][] = initialMatches ? [[ticker, initial]] : [];
+  const cacheRef = useRef(new Map<string, CandidatePreview>(initialEntries));
+  const [state, setState] = useState<PreviewState>(
+    initialMatches ? { status: "ready", data: initial } : { status: "loading" },
+  );
   const timeZone = useViewerTimeZone();
   const formatAsOf = (value: string | undefined) => formatDateTime(value, timeZone, dateTimeOptions, "Provider time unavailable");
 

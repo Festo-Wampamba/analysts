@@ -55,6 +55,29 @@ afterEach(() => {
 });
 
 describe("CandidateCarousel", () => {
+  it("uses the server-rendered selected preview without refetching it after hydration", () => {
+    render(
+      <CandidateCarousel
+        candidates={candidates}
+        initialTicker="NVDA"
+        initialPreview={{
+          ticker: "NVDA",
+          companyName: "NVIDIA Corp",
+          currency: "USD",
+          price: 219.8,
+          changePercent: -0.64,
+          asOf: "2026-08-14T19:54:00.000Z",
+          thesis: "The server already assembled this sourced NVDA thesis.",
+          generatedAt: "2026-08-14T19:54:00.000Z",
+          generatedStatus: "generated",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("The server already assembled this sourced NVDA thesis.")).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("auto-rotates candidates without scrolling the document", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
