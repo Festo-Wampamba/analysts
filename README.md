@@ -14,6 +14,23 @@ Every number the model is allowed to write down comes from a fact block the
 app fetched and can point back to — see `lib/domain/provenance.ts` and
 `lib/ai/guards.ts`. There are no unsourced figures in a report.
 
+## Submission links
+
+- Live application: [analysts.korestandard.com](https://analysts.korestandard.com/)
+- Development environment: [dev-analysts.korestandard.com](https://dev-analysts.korestandard.com/)
+- GitHub repository: [Festo-Wampamba/analysts](https://github.com/Festo-Wampamba/analysts)
+- Architecture diagram: [AI-Powered Equity Research Platform.pdf](<Design%20Diagram/AI-Powered%20Equity%20Research%20Platform.pdf>)
+
+## Data sources
+
+| Source | Used for | Safeguard |
+|---|---|---|
+| Finnhub | quotes, profiles, valuation and screening metrics, peers, news, earnings calendar, recommendations, and insider activity | schema validation, retry/timeout policy, provider cache, and source-call audit trail |
+| SEC Company Facts | annual revenue, profit, income, cash flow, and balance-sheet values | annual 10-K/FY selection with a single shared fiscal-period anchor |
+| Twelve Data / Alpha Vantage | intraday and historical chart bars | provider-specific cache TTLs and explicit chart-bar timestamps |
+| Groq | structured research and daily-idea narrative | JSON schema validation, sourced numeric allow-list, correction retry, and deterministic fallback |
+| Resend | daily-idea delivery | delivery failure is recorded without losing the persisted daily result |
+
 ## Local setup
 
 ```bash
@@ -122,6 +139,32 @@ The arithmetic is executable in `lib/submission/costs.ts` and tested in
 [Groq pricing](https://groq.com/pricing),
 [Neon pricing](https://neon.com/pricing), and
 [Resend pricing](https://resend.com/pricing).
+
+## Known limitations
+
+- Quotes and chart bars can differ slightly because they are distinct
+  provider products sampled at different times. The UI labels the Finnhub
+  quote separately from the chart-bar price and timestamp.
+- The screening universe is a deliberate, fixed 54-company/9-sector set;
+  it is not a complete market universe.
+- Provider rate limits or outages can leave a section unavailable. The app
+  preserves verified data, labels freshness, and does not invent a value.
+- Current deployment uses one long-lived application instance, so its
+  in-memory request coalescing and rate limits are not horizontally shared.
+- This is research software, not investment advice or a trading system.
+
+## With two additional weeks
+
+1. Add live provider contract checks and alerting for stale prices,
+   cross-period financial mismatches, and source-cache failures.
+2. Move rate limits and short-lived request coordination to a shared store,
+   then add a durable queue for screen execution to support horizontal scale.
+3. Expand the universe with maintained inclusion rules, factor backtests,
+   sector-neutral controls, and a review dashboard for score drift.
+4. Add user accounts, saved research lists, report exports, and scheduled
+   digest preferences while retaining complete per-report provenance.
+5. Complete Full (Strict) TLS, wire `BUILD_SHA` into Dokploy, and add
+   browser-level production smoke tests for both deployed environments.
 
 ## Docs
 

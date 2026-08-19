@@ -123,6 +123,7 @@ body::before {
 .market-chart__summary { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
 .market-chart__summary strong { color: #f4f4f5; font-family: var(--font-ibm-plex-mono), monospace; font-size: 1.5rem; font-weight: 500; letter-spacing: .01em; }
 .market-chart__summary span { font-family: var(--font-ibm-plex-mono), monospace; font-size: .75rem; }
+.market-chart__change-context { display: block; margin-top: 4px; color: #718079; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; }
 .market-chart__controls { display: flex; align-items: flex-end; flex-direction: column; gap: 9px; }
 .market-chart__freshness { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid rgba(34,197,94,.25); border-radius: 999px; background: rgba(34,197,94,.07); color: var(--positive); font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .04em; }
 .market-chart__freshness::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; content: ""; }
@@ -246,6 +247,24 @@ body::before {
 .daily-metrics strong { color: #f4f4f5; font-family: var(--font-ibm-plex-mono), monospace; font-size: .8125rem; font-weight: 400; }
 .daily-reason { padding: 16px 18px; }
 .daily-reason p { margin: 9px 0 0; color: #e7f1f8; font-size: 1rem; line-height: 1.62; text-wrap: pretty; }
+.daily-evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.daily-evidence-card { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; }
+.daily-evidence-card--thesis { grid-row: span 2; }
+.daily-evidence-card ol, .daily-evidence-card ul { margin: 0; padding-left: 18px; color: #d9e2e9; font-size: .875rem; line-height: 1.58; }
+.daily-evidence-card li + li { margin-top: 7px; }
+.daily-key-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.daily-key-metrics div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.daily-key-metrics span, .daily-narrative-detail > div > span, .daily-source-links > span { color: #8b93a1; font-family: var(--font-ibm-plex-mono), monospace; font-size: .625rem; letter-spacing: .06em; text-transform: uppercase; }
+.daily-key-metrics strong { overflow-wrap: anywhere; color: #f4f4f5; font-family: var(--font-ibm-plex-mono), monospace; font-size: .8125rem; font-weight: 400; }
+.daily-evidence-card > p, .daily-confidence p, .daily-narrative-detail p { margin: 0; color: #aeb9c5; font-size: .8125rem; line-height: 1.55; }
+.daily-narrative-detail { display: flex; flex-direction: column; gap: 11px; }
+.daily-narrative-detail > div { display: flex; flex-direction: column; gap: 4px; }
+.daily-narrative-detail ul { color: #aeb9c5; font-size: .8125rem; }
+.daily-confidence { display: flex; flex-direction: column; gap: 5px; }
+.daily-confidence strong { color: var(--mint); font-family: var(--font-ibm-plex-mono), monospace; font-size: .8125rem; font-weight: 400; }
+.daily-source-links { display: flex; flex-direction: column; gap: 7px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,.06); }
+.daily-source-links a { color: var(--mint); font-size: .75rem; line-height: 1.45; }
+.daily-source-links a:hover { text-decoration: underline; }
 .daily-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .button { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 20px; border: 1px solid rgba(255,255,255,.08); border-radius: 999px; background: rgba(255,255,255,.05); color: #f4f4f5; cursor: pointer; font-size: .875rem; transition: background .18s, transform .18s; }
 .button:hover { background: rgba(255,255,255,.09); transform: translateY(-1px); }
@@ -419,7 +438,8 @@ body::before {
   .peer-table { min-width: 570px; }
   .news-item { grid-template-columns: 1fr; gap: 5px; }
   .narrative-rows > div { grid-template-columns: 1fr; gap: 4px; }
-  .scenario-grid, .daily-engine-grid { grid-template-columns: 1fr; }
+  .scenario-grid, .daily-engine-grid, .daily-evidence-grid { grid-template-columns: 1fr; }
+  .daily-evidence-card--thesis { grid-row: auto; }
   .source-disclosure summary { align-items: flex-start; flex-direction: column; gap: 3px; }
   .source-row { grid-template-columns: 80px minmax(0, 1fr); gap: 5px 8px; font-size: .6875rem; }
   .source-row time { grid-column: 1; color: #718079; }

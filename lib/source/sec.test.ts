@@ -55,6 +55,34 @@ describe("normalizeCompanyFacts", () => {
     expect(normalizeCompanyFacts("EX", raw).freeCashFlow).toBeUndefined();
   });
 
+  it("uses the newest coherent annual period across alternate revenue tags", () => {
+    const raw = {
+      cik: 1,
+      entityName: "Example",
+      facts: {
+        "us-gaap": {
+          // This legacy tag is still present, but it must not anchor the
+          // report to an older filing when a supported current tag exists.
+          RevenueFromContractWithCustomerExcludingAssessedTax: {
+            units: { USD: [fact(26.9, "2022-01-30", "2022-03-18", "legacy-revenue")] },
+          },
+          Revenues: {
+            units: { USD: [fact(100, "2024-01-28", "2024-02-21", "revenue-old"), fact(120, "2025-01-26", "2025-02-26", "revenue-current")] },
+          },
+          GrossProfit: {
+            units: { USD: [fact(78, "2024-01-28", "2024-02-21", "gross-old"), fact(95, "2025-01-26", "2025-02-26", "gross-current")] },
+          },
+        },
+      },
+    };
+
+    const snapshot = normalizeCompanyFacts("EX", raw);
+
+    expect(snapshot.periodEnd).toBe("2025-01-26");
+    expect(snapshot.revenue).toMatchObject({ value: 120, periodEnd: "2025-01-26" });
+    expect(snapshot.grossProfit).toMatchObject({ value: 95, periodEnd: "2025-01-26" });
+  });
+
   it("uses alternative current-debt tags without double counting them", () => {
     const current = [
       fact(8, "2024-12-31", "2025-02-01", "current-old"),

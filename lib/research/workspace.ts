@@ -12,6 +12,7 @@ import {
 } from "@/lib/source/finnhub-cached";
 import { metricNumber } from "@/lib/source/finnhub-schemas";
 import { getFinancialSnapshot, type FinancialSnapshot } from "@/lib/source/sec";
+import { sortUpcomingEarnings } from "./earnings";
 import { getResearchReport, type ResearchReport } from "./report";
 
 export type PeerSnapshot = {
@@ -196,7 +197,7 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
     else failedSections.push({ section: "chart", reason: errorMessage(chartResult.reason) });
 
     const earnings = earningsResult.status === "fulfilled"
-      ? earningsResult.value.data.earningsCalendar
+      ? sortUpcomingEarnings(earningsResult.value.data.earningsCalendar
           .filter((event) => event.symbol.toUpperCase() === symbol)
           .map(({ date, hour, quarter, year, epsEstimate, revenueEstimate }) => ({
             date,
@@ -205,7 +206,7 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
             year,
             epsEstimate,
             revenueEstimate,
-          }))
+          })))
       : [];
     if (earningsResult.status === "fulfilled") provenance.push(earningsResult.value.provenance);
     else failedSections.push({ section: "catalysts", reason: errorMessage(earningsResult.reason) });

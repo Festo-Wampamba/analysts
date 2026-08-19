@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
-import { marketFreshness } from "@/lib/market/freshness";
 import type { ChartPoint, ChartRange, ChartSeries } from "@/lib/source/chart";
 
 type ChartState = ChartSeries | { error: string };
@@ -102,7 +101,6 @@ export function PriceChart({
   const change = latest && opening && opening.close !== 0
     ? ((latest.close - opening.close) / opening.close) * 100
     : null;
-  const freshness = latest ? marketFreshness(series!.asOf) : null;
   const formatAsOf = (value: string) => formatDateTime(value, timeZone, dateTimeOptions, "Provider time unavailable");
   const formatTooltipTime = formatAsOf;
 
@@ -150,16 +148,16 @@ export function PriceChart({
     <section className={`market-chart ${geometry?.rising === false ? "market-chart--down" : ""}`} aria-label={`${ticker} price chart`}>
       <div className="market-chart__header">
         <div>
-          <span className="market-chart__label">Price · {ticker}</span>
+          <span className="market-chart__label">Chart bar · {ticker}</span>
           {latest && (
             <div className="market-chart__summary">
               <strong>{formatPrice(latest.close, currency)}</strong>
               {change !== null && <span className={change >= 0 ? "trend-up" : "trend-down"}>{change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%</span>}
             </div>
           )}
+          {latest && <small className="market-chart__change-context">{range.toUpperCase()} change versus the first displayed chart bar</small>}
         </div>
         <div className="market-chart__controls">
-          {freshness && <span className={`market-chart__freshness${freshness.stale ? " is-stale" : ""}`}>{freshness.label}</span>}
           <div className="market-chart__range" aria-label="Chart range">
             {chartRanges.map((option) => (
               <button
