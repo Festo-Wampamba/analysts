@@ -11,8 +11,10 @@ separate freshness windows so a cached report never labels an old price as
 current.
 
 Every number the model is allowed to write down comes from a fact block the
-app fetched and can point back to — see `lib/domain/provenance.ts` and
-`lib/ai/guards.ts`. There are no unsourced figures in a report.
+app fetched and can point back to. A second factual-claim guard rejects
+contradicted recommendation language, unsupported historical comparisons, and
+ticker references outside the sourced identity/peer set — see
+`lib/domain/provenance.ts` and `lib/ai/guards.ts`.
 
 ## Submission links
 
@@ -26,7 +28,7 @@ app fetched and can point back to — see `lib/domain/provenance.ts` and
 | Source | Used for | Safeguard |
 |---|---|---|
 | Finnhub | quotes, profiles, valuation and screening metrics, peers, news, earnings calendar, recommendations, and insider activity | schema validation, retry/timeout policy, provider cache, and source-call audit trail |
-| SEC Company Facts | annual revenue, profit, income, cash flow, and balance-sheet values | annual 10-K/FY selection with a single shared fiscal-period anchor |
+| SEC Company Facts | annual revenue, profit, income, cash flow, and balance-sheet values | annual 10-K/FY selection with a shared fiscal-period anchor, five-year source-traced history, and FCF only when cash flow and capex share a filing period |
 | Twelve Data / Alpha Vantage | intraday and historical chart bars | provider-specific cache TTLs and explicit chart-bar timestamps |
 | Groq | structured research and daily-idea narrative | JSON schema validation, sourced numeric allow-list, correction retry, and deterministic fallback |
 | Resend | daily-idea delivery | delivery failure is recorded without losing the persisted daily result |
@@ -115,8 +117,30 @@ its behavior is covered by `lib/screen/score.test.ts`.
 
 The LLM does not rank stocks and cannot introduce a new candidate. It receives
 the selected company’s sourced fact block only after deterministic scoring,
-writes the narrative, and passes a numerical allow-list check. If generation
-or correction fails, the application uses a deterministic sourced fallback.
+writes the narrative, and passes numerical plus factual-claim validation. If
+generation or correction fails, the application uses a deterministic
+data-grounded fallback. The UI distinguishes a rejected model claim from an
+AI-provider failure and preserves linked source evidence.
+
+## Runtime and delivery visibility
+
+`GET /api/health` reports database/persistence readiness plus the most recent
+runtime state for market data, news, SEC filings, Groq, scheduler, and Resend
+delivery from the source-call audit log. It reports `degraded` rather than
+claiming that a configured provider is healthy when it has no verified runtime
+call.
+
+The daily screen's next scheduled trigger is **weekdays at 13:00 UTC**, matching
+`.github/workflows/daily-screen.yml`. The Daily Idea view exposes the last
+attempt, next trigger, masked recipient configuration, and actual delivery
+result. A failed email does not discard the in-app result; it is shown as
+requiring an authorized retry.
+
+The top-five table uses two distinct fields: **leading evidence** is a
+deterministic factor-score explanation, while the dated **catalyst** is
+generated only for the published winner. The no-idea state records the run
+date, score threshold, evaluated coverage, and explicit reason rather than
+publishing a filler pick.
 
 ## Cost estimate
 

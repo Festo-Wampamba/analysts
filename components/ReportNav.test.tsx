@@ -35,6 +35,7 @@ describe("ReportNav", () => {
     fireEvent.click(screen.getByRole("link", { name: "Valuation" }));
 
     expect(screen.getByRole("link", { name: "Valuation" })).toHaveClass("is-active");
+    expect(screen.getByRole("link", { name: "Valuation" })).toHaveAttribute("aria-current", "location");
     expect(screen.getByRole("link", { name: "Overview" })).not.toHaveClass("is-active");
   });
 

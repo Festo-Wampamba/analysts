@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SCORING_CONFIG,
+  leadingEvidence,
   scoreCandidates,
   type CandidateInput,
   type ScoringConfig,
@@ -80,6 +81,17 @@ describe("scoreCandidates ordering", () => {
   it("breaks composite-score ties by ticker ascending", () => {
     const result = scoreCandidates([candidate("ZZZ"), candidate("AAA")], permissive);
     expect(result.map((c) => c.ticker)).toEqual(["AAA", "ZZZ"]);
+  });
+});
+
+describe("leadingEvidence", () => {
+  it("keeps deterministic leading-factor evidence separate from catalyst prose", () => {
+    expect(leadingEvidence({ growth: 0.8, momentum: 0.6, valuation: null })).toEqual({
+      factor: "growth",
+      score: 0.8,
+      label: "Growth",
+      summary: "Growth led the relative screen with a 0.80 factor score.",
+    });
   });
 });
 

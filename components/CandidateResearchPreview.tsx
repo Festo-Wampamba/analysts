@@ -77,9 +77,11 @@ function formatMoney(value: number | undefined, currency = "USD") {
 export function CandidateResearchPreview({
   ticker,
   initial,
+  onLoadingChange,
 }: {
   ticker: string;
   initial?: CandidatePreview;
+  onLoadingChange?: (loading: boolean) => void;
 }) {
   const initialMatches = initial !== undefined && initial.ticker.toUpperCase() === ticker.toUpperCase();
   const initialEntries: [string, CandidatePreview][] = initialMatches ? [[ticker, initial]] : [];
@@ -94,12 +96,15 @@ export function CandidateResearchPreview({
     const cached = cacheRef.current.get(ticker);
     if (cached) {
       setState({ status: "ready", data: cached });
+      onLoadingChange?.(false);
       return undefined;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     setState({ status: "loading" });
-    void fetch(`/api/research/${encodeURIComponent(ticker)}`, { cache: "no-store" })
+    onLoadingChange?.(true);
+    void fetch(`/api/research/${encodeURIComponent(ticker)}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const payload: unknown = await response.json().catch(() => null);
         if (!response.ok) {
@@ -114,16 +119,23 @@ export function CandidateResearchPreview({
       })
       .then((preview) => {
         cacheRef.current.set(ticker, preview);
-        if (!cancelled) setState({ status: "ready", data: preview });
+        if (!cancelled) {
+          setState({ status: "ready", data: preview });
+          onLoadingChange?.(false);
+        }
       })
       .catch((error: unknown) => {
-        if (!cancelled) setState({ status: "error", message: error instanceof Error ? error.message : "Sourced research is temporarily unavailable." });
+        if (!cancelled) {
+          setState({ status: "error", message: error instanceof Error ? error.message : "Sourced research is temporarily unavailable." });
+          onLoadingChange?.(false);
+        }
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [ticker]);
+  }, [ticker, onLoadingChange]);
 
   if (state.status === "loading") {
     return <section className="candidate-research-preview" aria-busy="true"><span className="eyebrow eyebrow--fact">Sourced research · {ticker}</span><p>Loading live provider facts and verified research…</p></section>;

@@ -23,6 +23,27 @@ type ResearchPersistenceSchema = {
   source_calls_research_run_link: boolean;
 };
 
+type ProviderRuntimeRow = {
+  provider: string;
+  endpoint: string;
+  status: "fresh" | "failed" | "stale" | "unknown";
+  fetched_at: Date;
+};
+
+type RuntimeState = "healthy" | "failed" | "unknown";
+
+function runtimeState(row: ProviderRuntimeRow | undefined): RuntimeState {
+  if (!row) return "unknown";
+  return row.status === "fresh" ? "healthy" : "failed";
+}
+
+function latestFor(
+  rows: ProviderRuntimeRow[],
+  predicate: (row: ProviderRuntimeRow) => boolean,
+): ProviderRuntimeRow | undefined {
+  return rows.find(predicate);
+}
+
 const researchPersistenceQuery = `
   select
     to_regclass('public.research_runs') is not null as research_runs,
@@ -39,7 +60,7 @@ const researchPersistenceQuery = `
 export async function GET() {
   const build = process.env.BUILD_SHA || "unknown";
   try {
-    const [result, persistenceResult] = await Promise.all([
+    const [result, persistenceResult, providerRuntimeResult] = await Promise.all([
       pool.query<{
         trading_date: string;
         status: string;
@@ -51,6 +72,13 @@ export async function GET() {
          limit 1`,
       ),
       pool.query<ResearchPersistenceSchema>(researchPersistenceQuery),
+      pool.query<ProviderRuntimeRow>(
+        `select distinct on (provider, endpoint)
+           provider, endpoint, status, fetched_at
+         from source_calls
+         where provider in ('finnhub', 'sec', 'groq', 'resend')
+         order by provider, endpoint, fetched_at desc`,
+      ),
     ]);
     const latest = result.rows[0] ?? null;
     const persistence = persistenceResult.rows[0];
@@ -60,9 +88,31 @@ export async function GET() {
       persistence.source_calls_research_run_link,
     );
     const screenStale = latest ? isTradingDateStale(latest.trading_date) : true;
+    const providerRuntime = providerRuntimeResult.rows;
+    const market = latestFor(providerRuntime, (row) => row.provider === "finnhub" && row.endpoint === "/quote");
+    const news = latestFor(providerRuntime, (row) => row.provider === "finnhub" && row.endpoint === "/company-news");
+    const filings = latestFor(providerRuntime, (row) => row.provider === "sec");
+    const llm = latestFor(providerRuntime, (row) => row.provider === "groq");
+    const delivery = latestFor(providerRuntime, (row) => row.provider === "resend");
+    const runtime = {
+      database: "healthy" as const,
+      market: runtimeState(market),
+      filings: runtimeState(filings),
+      news: runtimeState(news),
+      llm: runtimeState(llm),
+      scheduler: latest?.status === "failed" ? "failed" as const : latest ? "healthy" as const : "unknown" as const,
+      delivery: runtimeState(delivery),
+      updatedAt: Object.fromEntries(
+        [market, filings, news, llm, delivery]
+          .filter((row): row is ProviderRuntimeRow => Boolean(row))
+          .map((row) => [`${row.provider}:${row.endpoint}`, row.fetched_at.toISOString()]),
+      ),
+    };
+    const requiredRuntimeUnknownOrFailed = [runtime.market, runtime.llm, runtime.scheduler]
+      .some((state) => state !== "healthy");
     return NextResponse.json({
       status:
-        screenStale || latest?.status === "failed" || !researchPersistenceReady
+        screenStale || latest?.status === "failed" || !researchPersistenceReady || requiredRuntimeUnknownOrFailed
           ? "degraded"
           : "ok",
       db: "reachable",
@@ -82,6 +132,7 @@ export async function GET() {
         twelveData: Boolean(process.env.TWELVE_DATA_API_KEY),
         alphaVantage: Boolean(process.env.ALPHA_VANTAGE_API_KEY),
       },
+      runtime,
       latestScreen: latest && {
         tradingDate: latest.trading_date,
         status: latest.status,

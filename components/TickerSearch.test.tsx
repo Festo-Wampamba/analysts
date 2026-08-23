@@ -38,4 +38,15 @@ describe("TickerSearch", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("analysts.recent-tickers")).toBeNull();
   });
+
+  it("explains invalid ticker input inline instead of navigating", () => {
+    render(<TickerSearch />);
+    const input = screen.getByRole("combobox", { name: "Ticker symbol" });
+
+    fireEvent.change(input, { target: { value: "NVDA!" } });
+    fireEvent.submit(input.closest("form")!);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Enter a valid ticker symbol");
+    expect(push).not.toHaveBeenCalled();
+  });
 });

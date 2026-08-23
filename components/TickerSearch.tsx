@@ -75,6 +75,7 @@ export function TickerSearch() {
   const [recent, setRecent] = useState<string[]>(readRecentSearches);
   const [focused, setFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
@@ -96,15 +97,22 @@ export function TickerSearch() {
   const visibleSuggestions = ticker.trim() ? matches : focused ? recentSuggestions : [];
   const listId = "ticker-search-suggestions";
 
-  function navigateTo(nextTicker: string) {
+  function navigateTo(nextTicker: string): boolean {
     const normalized = nextTicker.trim().toUpperCase();
-    if (!/^[A-Z]{1,6}(?:[.-][A-Z]{1,2})?$/.test(normalized)) return;
+    if (!/^[A-Z]{1,6}(?:[.-][A-Z]{1,2})?$/.test(normalized)) {
+      setMessage("Enter a valid ticker symbol, such as NVDA or BRK.B.");
+      return false;
+    }
+    setMessage(knownTickers.some((entry) => entry.ticker === normalized)
+      ? null
+      : `${normalized} is outside the current screen universe; the research page will validate it against live providers.`);
     const nextRecent = [normalized, ...recent.filter((item) => item !== normalized)].slice(0, 5);
     setRecent(nextRecent);
     writeRecentSearch(normalized, recent);
     setTicker(normalized);
     setActiveIndex(-1);
     router.push(`/research/${encodeURIComponent(normalized)}`);
+    return true;
   }
 
   return (
@@ -133,7 +141,7 @@ export function TickerSearch() {
         type="search"
         role="combobox"
         value={ticker}
-        onChange={(event) => { setTicker(event.target.value.toUpperCase()); setActiveIndex(-1); }}
+        onChange={(event) => { const value = event.target.value.toUpperCase(); setTicker(value); setActiveIndex(-1); setMessage(value.trim() && !suggestionsFor(value).length ? "No screen-universe match. A valid listed symbol can still be checked against live providers." : null); }}
         onFocus={() => setFocused(true)}
         onBlur={() => window.setTimeout(() => setFocused(false), 120)}
         onKeyDown={(event) => {
@@ -148,10 +156,13 @@ export function TickerSearch() {
         aria-controls={listId}
         aria-expanded={visibleSuggestions.length > 0}
         aria-activedescendant={activeIndex >= 0 ? `${listId}-${visibleSuggestions[activeIndex]?.ticker}` : undefined}
+        aria-describedby={message ? "ticker-search-message" : undefined}
+        aria-invalid={message?.startsWith("Enter a valid") ? true : undefined}
         maxLength={9}
         autoComplete="off"
       />
       <kbd>/</kbd>
+      {message && <span id="ticker-search-message" className="ticker-search-message" role="status">{message}</span>}
       {visibleSuggestions.length > 0 && (
         <div className="ticker-suggestions" id={listId} role="listbox" aria-label={ticker.trim() ? "Ticker suggestions" : "Recent searches"}>
           {!ticker.trim() && <div className="ticker-suggestions__label">Recent searches <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { setRecent([]); try { window.localStorage.removeItem(RECENT_SEARCHES_KEY); } catch { /* ignore */ } }}>Clear</button></div>}

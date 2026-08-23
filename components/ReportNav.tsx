@@ -46,6 +46,7 @@ export function ReportNav() {
           className={activeSection === id ? "is-active" : ""}
           href={`#${id}`}
           key={id}
+          aria-current={activeSection === id ? "location" : undefined}
           onClick={() => setActiveSection(id)}
         >
           {title}

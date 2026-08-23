@@ -30,6 +30,7 @@ import {
   type ScoredCandidate,
 } from "./score";
 import { resolveTradingDate } from "./trading-date";
+import { nextScheduledScreenAt } from "./schedule";
 import { SCREEN_UNIVERSE, type UniverseEntry } from "./universe";
 import type { DailyIdeaFacts, DailyIdeaPayload, ScreenRunResult } from "./types";
 
@@ -239,29 +240,38 @@ const FACTOR_LABELS: Record<keyof DailyIdeaFacts["factorScores"], string> = {
 
 function deterministicIdeaFallback(
   facts: DailyIdeaFacts,
+  error: unknown,
 ): { narrative: DailyIdeaNarrative; generated: GeneratedContentMeta } {
   const rankedFactors = Object.entries(facts.factorScores)
     .filter((entry): entry is [keyof DailyIdeaFacts["factorScores"], number] =>
       typeof entry[1] === "number",
     )
     .sort((a, b) => b[1] - a[1])
-    .map(([factor]) => FACTOR_LABELS[factor]);
-  const [first = "available fundamentals", second = "relative positioning"] =
+    .map(([factor, score]) => ({ label: FACTOR_LABELS[factor], score }));
+  const [first = { label: "available fundamentals", score: 0 }, second = { label: "relative positioning", score: 0 }] =
     rankedFactors;
+  const firstScore = first.score.toFixed(2);
+  const secondScore = second.score.toFixed(2);
+  const revenueGrowth = facts.metrics.revenueGrowthTTMYoy;
+  const pe = facts.metrics.peTTM;
+  const latestNews = facts.news?.[0];
+  const fallbackReason = error instanceof ScreenError
+    ? "Model output failed factual verification"
+    : "AI narrative generation was unavailable (provider error)";
 
   return {
     narrative: {
-      selectionReason: `${facts.ticker} ranked first in the daily screen, led by ${first} and ${second}.`,
+      selectionReason: `${facts.ticker} ranked first in the daily screen with ${first.label.toLowerCase()} (${firstScore}) and ${second.label.toLowerCase()} (${secondScore}) as its strongest relative factors.`,
       thesisPoints: [
-        `${first[0].toUpperCase()}${first.slice(1)} was the strongest relative factor in the screened universe.`,
-        `${second[0].toUpperCase()}${second.slice(1)} provided additional support for the ranking.`,
-        "The result is based on the available sourced data and should be reassessed as new information arrives.",
+        `${first.label} was the strongest relative factor in the screened universe at ${firstScore}.`,
+        `${second.label} provided the next strongest factor score at ${secondScore}.${revenueGrowth !== undefined ? ` Sourced trailing revenue growth was ${revenueGrowth.toFixed(2)}%.` : ""}`,
+        `${pe !== undefined ? `The sourced trailing P/E was ${pe.toFixed(2)}. ` : ""}The screen result should be reassessed when the sourced inputs refresh.`,
       ],
-      keyCatalyst: facts.news?.length
-        ? "A recent company-specific development may change how the market assesses the business."
+      keyCatalyst: latestNews
+        ? `${latestNews.date} · ${latestNews.source}: ${latestNews.headline}`
         : "No dated company-specific catalyst was available from the configured sources.",
       bullCase:
-        "The constructive case is that the company sustains its strongest operating factors while market expectations remain measured.",
+        `The constructive case is that the ${first.label.toLowerCase()} and ${second.label.toLowerCase()} factors that led the screen remain supported by later sourced data.`,
       bearCase:
         "The adverse case is that the factors supporting the ranking weaken or the available data no longer reflects current conditions.",
       risks: [
@@ -269,13 +279,13 @@ function deterministicIdeaFallback(
         "A relative screen can rank a company highly even when the broader market backdrop is weak.",
       ],
       confidenceRationale:
-        "Confidence reflects data coverage and the candidate's position relative to the qualifying rule.",
+        `Confidence reflects ${(facts.coverage * 100).toFixed(0)}% factor coverage and a composite score of ${(facts.compositeScore * 100).toFixed(1)} against the ${(facts.threshold * 100).toFixed(1)} qualifying threshold.`,
     },
     generated: {
       generatedAt: new Date().toISOString(),
       basedOn: ["screen", ...Object.keys(facts).filter((key) => key !== "ticker")],
       modelLabel: "deterministic-safety-fallback",
-      limitations: ["Model output failed factual verification."],
+      limitations: [`${fallbackReason}.`],
       status: "fallback",
     },
   };
@@ -303,6 +313,7 @@ async function claimRun(
       startedAt: new Date(),
       universeSize,
       threshold: String(DEFAULT_SCORING_CONFIG.threshold),
+      nextScheduledAt: nextScheduledScreenAt(),
     })
     .onConflictDoNothing()
     .returning({ id: schema.screenRuns.id });
@@ -317,7 +328,7 @@ async function claimRun(
   // request's UPDATE already won the race.
   const [reclaimed] = await db
     .update(schema.screenRuns)
-    .set({ status: "running", startedAt: new Date(), error: null })
+    .set({ status: "running", startedAt: new Date(), error: null, nextScheduledAt: nextScheduledScreenAt() })
     .where(
       and(
         eq(schema.screenRuns.tradingDate, tradingDate),
@@ -454,7 +465,7 @@ async function executeScreen(
         generatedIdea = await generateVerifiedIdea(facts);
       } catch (error) {
         console.error("daily idea generation verification failed; using fallback:", error);
-        generatedIdea = deterministicIdeaFallback(facts);
+        generatedIdea = deterministicIdeaFallback(facts, error);
       }
       const { narrative, generated } = generatedIdea;
       idea = { facts, narrative, generated, provenance };

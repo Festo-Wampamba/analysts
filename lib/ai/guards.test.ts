@@ -4,6 +4,7 @@ import {
   extractNumericClaims,
   sanitizeSourceText,
   sanitizeSourceUrl,
+  verifyNarrativeClaims,
   verifyNumericClaims,
 } from "./guards";
 
@@ -152,6 +153,33 @@ describe("sanitizeSourceText", () => {
     expect(sanitizeSourceText("Apple beats Q3 estimates")).toBe(
       "Apple beats Q3 estimates",
     );
+  });
+});
+
+describe("verifyNarrativeClaims", () => {
+  const context = {
+    ticker: "GOOGL",
+    peerTickers: ["META", "NFLX"],
+    analystRecommendations: { strongBuy: 10, buy: 12, hold: 8, sell: 1, strongSell: 0 },
+  };
+
+  it("rejects a recommendation claim contradicted by the sourced breakdown", () => {
+    expect(verifyNarrativeClaims("There are no holds in the current analyst mix.", context)).toMatchObject({
+      ok: false,
+      violations: [expect.stringContaining("holds")],
+    });
+  });
+
+  it("rejects an unsupported historical-comparison assertion", () => {
+    expect(verifyNarrativeClaims("The multiple trades at a historical premium.", context).ok).toBe(false);
+  });
+
+  it("rejects a ticker absent from the sourced company and peer set", () => {
+    expect(verifyNarrativeClaims("AAPL has the stronger setup.", context).ok).toBe(false);
+  });
+
+  it("allows sourced identity and peer references", () => {
+    expect(verifyNarrativeClaims("GOOGL can be compared with META and NFLX.", context).ok).toBe(true);
   });
 });
 
