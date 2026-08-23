@@ -28,7 +28,10 @@ export const modelNarrativeSchema = z.object({
   catalysts: prose,
   risks: z.array(prose).min(1),
   scenarios: z.array(scenarioSchema).length(3),
-  thesis: prose,
+  // A one-line thesis reads as filler; the prompt asks for 3-5 sentences
+  // referencing the report's own catalysts and risks, and this floor makes a
+  // generic single sentence fail validation and retry.
+  thesis: z.string().min(200),
   limitations: z.array(prose),
 });
 export type ModelResearchNarrative = z.infer<typeof modelNarrativeSchema>;

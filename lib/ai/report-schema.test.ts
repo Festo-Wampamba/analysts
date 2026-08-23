@@ -18,7 +18,8 @@ const validResearch = {
     { label: "base", summary: "Steady growth continues." },
     { label: "bear", summary: "Hardware demand softens." },
   ],
-  thesis: "Quality compounder at a full price.",
+  thesis:
+    "The stance is constructive: the services attach broadens margins while hardware holds share. The earnings release and product event named above are the near-term proof points, and regulatory pressure on the app store is the risk that most constrains the upside. The factor most likely to change the stance is a regulatory ruling that caps services take rates.",
   limitations: ["Based on free-tier data only."],
 };
 
@@ -46,6 +47,15 @@ describe("researchNarrativeSchema", () => {
   it("rejects an empty risks list", () => {
     expect(
       researchNarrativeSchema.safeParse({ ...validResearch, risks: [] }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a one-line generic thesis", () => {
+    expect(
+      modelNarrativeSchema.safeParse({
+        ...validModelResearch,
+        thesis: "Quality compounder at a full price.",
+      }).success,
     ).toBe(false);
   });
 });

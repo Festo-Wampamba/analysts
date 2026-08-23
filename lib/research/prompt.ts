@@ -53,6 +53,10 @@ ${newsBlock}
 Write the research report for ${facts.ticker} as JSON in exactly this shape:
 ${RESEARCH_SHAPE}
 
+Field guidance:
+- "businessModel": how the company earns revenue AND its competitive position versus rivals.
+- "thesis": 3-5 sentences. State a stance, justify it by referencing the specific catalysts and risks you wrote above, and end with the one factor most likely to change the stance. No price targets.
+
 If the facts lack coverage for a section, say so plainly in that section and record the gap in "limitations".`;
 }
 
