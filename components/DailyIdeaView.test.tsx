@@ -113,8 +113,9 @@ describe("DailyIdeaView", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "AI narrative temporarily unavailable — showing sourced data only.",
+      "This daily idea is using deterministic sourced explanations. Groq was not accepted for this narrative.",
     );
+    expect(screen.getByRole("status")).not.toHaveTextContent("—");
     expect(screen.getAllByText(/Fallback/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Verified fallback/)).not.toBeInTheDocument();
   });

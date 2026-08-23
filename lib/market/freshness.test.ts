@@ -22,7 +22,7 @@ describe("marketFreshness", () => {
   it("labels a Saturday view of the last Friday close as markets closed", () => {
     const now = Date.parse("2026-08-15T16:00:00.000Z");
     expect(marketFreshness("2026-08-14T20:00:00.000Z", now)).toEqual({
-      label: "Markets closed — last close Fri, Aug 14",
+      label: "Markets closed. Last close Fri, Aug 14",
       stale: false,
     });
   });
@@ -30,7 +30,7 @@ describe("marketFreshness", () => {
   it("labels a Sunday view of Friday close as markets closed", () => {
     const now = Date.parse("2026-08-16T16:00:00.000Z");
     expect(marketFreshness("2026-08-14T20:00:00.000Z", now)).toEqual({
-      label: "Markets closed — last close Fri, Aug 14",
+      label: "Markets closed. Last close Fri, Aug 14",
       stale: false,
     });
   });

@@ -26,7 +26,7 @@ export function renderDailyIdeaEmail(
 ): EmailMessage {
   const { facts, narrative, generated } = idea;
   const name = facts.company?.name ?? facts.ticker;
-  const subject = `Daily stock idea — ${facts.ticker} (${tradingDate})`;
+  const subject = `Daily stock idea: ${facts.ticker} (${tradingDate})`;
 
   const priceLine = facts.price
     ? `${formatNumber(facts.price.current)} ${facts.company?.currency ?? "USD"} (${formatPercent(facts.price.changePercent)} vs previous close)`
@@ -49,7 +49,7 @@ export function renderDailyIdeaEmail(
   );
 
   const sourceLines = [
-    "Finnhub — quote, company profile, key metrics, analyst recommendations, insider transactions, company news",
+    "Finnhub: quote, company profile, key metrics, analyst recommendations, insider transactions, company news",
     ...(facts.news ?? []).map((item) => `${item.source} (${item.date}): ${item.url}`),
   ];
 

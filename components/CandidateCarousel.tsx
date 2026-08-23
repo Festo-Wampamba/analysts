@@ -9,6 +9,7 @@ import {
   type CandidatePreview,
 } from "@/components/CandidateResearchPreview";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
+import { removeStatementDashes } from "@/lib/domain/text";
 
 type Candidate = LatestIdea["candidates"][number];
 
@@ -184,13 +185,13 @@ export function CandidateCarousel({
         <div>
           <span>Now viewing</span>
           <strong>{selected.ticker}</strong>
-          <p>{selected.catalyst ?? "Factor detail will be available in the sourced report."}</p>
+          <p>{selected.catalyst ? removeStatementDashes(selected.catalyst) : "Factor detail will be available in the sourced report."}</p>
         </div>
         <Link className="button" href={`/research/${selected.ticker}`}>
           Open full sourced report
         </Link>
       </div>
-      {refreshStale && <p className="carousel-refresh-note" role="status">Candidate refresh is temporarily unavailable — showing the last verified queue.</p>}
+      {refreshStale && <p className="carousel-refresh-note" role="status">Candidate refresh is temporarily unavailable. Showing the last verified queue.</p>}
       <CandidateResearchPreview ticker={selected.ticker} initial={initialPreview} onLoadingChange={setPreviewLoading} />
     </section>
   );

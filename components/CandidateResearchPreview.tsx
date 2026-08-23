@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
+import { removeStatementDashes } from "@/lib/domain/text";
 
 export type CandidatePreview = {
   ticker: string;
@@ -59,7 +60,9 @@ function parsePreview(payload: unknown, requestedTicker: string): CandidatePrevi
     price: asNumber(quote?.price),
     changePercent: asNumber(quote?.changePercent),
     asOf: asString(report.workspace?.chart?.asOf) ?? asString(quote?.quoteAsOf),
-    thesis: asString(report.narrative?.thesis),
+    thesis: report.narrative?.thesis && typeof report.narrative.thesis === "string"
+      ? removeStatementDashes(report.narrative.thesis)
+      : undefined,
     generatedAt: asString(report.generated?.generatedAt),
     generatedStatus,
   };

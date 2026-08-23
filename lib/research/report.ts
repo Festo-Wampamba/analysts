@@ -1,4 +1,4 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, ne, or } from "drizzle-orm";
 
 import { groqJson } from "@/lib/ai/groq";
 import { verifyNarrativeClaims, verifyNumericClaims } from "@/lib/ai/guards";
@@ -38,6 +38,7 @@ function findExcessDecimalNumbers(text: string): string[] {
 }
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const FALLBACK_CACHE_TTL_MS = 15 * 60 * 1000;
 const QUOTE_FRESHNESS_MS = 15 * 60 * 1000;
 const NEWS_LOOKBACK_DAYS = 30;
 
@@ -306,6 +307,10 @@ async function readCachedReport(ticker: string) {
       and(
         eq(schema.reportsCache.ticker, ticker),
         gt(schema.reportsCache.expiresAt, new Date()),
+        or(
+          ne(schema.reportsCache.model, "deterministic-safety-fallback"),
+          gt(schema.reportsCache.generatedAt, new Date(Date.now() - FALLBACK_CACHE_TTL_MS)),
+        ),
       ),
     )
     .orderBy(desc(schema.reportsCache.generatedAt))
@@ -397,7 +402,10 @@ export async function getResearchReport(
     narrative,
     model,
     generatedAt,
-    expiresAt: new Date(generatedAt.getTime() + CACHE_TTL_MS),
+    expiresAt: new Date(
+      generatedAt.getTime() +
+        (model === "deterministic-safety-fallback" ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS),
+    ),
   });
 
   return {
