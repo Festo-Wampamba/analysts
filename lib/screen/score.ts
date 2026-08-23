@@ -52,6 +52,42 @@ export type ScoredCandidate = {
   qualified: boolean;
 };
 
+export type LeadingEvidence = {
+  factor: FactorName;
+  score: number;
+  label: string;
+  summary: string;
+};
+
+const FACTOR_LABELS: Record<FactorName, string> = {
+  growth: "Growth",
+  profitability: "Profitability",
+  valuation: "Valuation",
+  financialStrength: "Financial strength",
+  momentum: "Momentum",
+  sentiment: "Analyst sentiment",
+  insiderActivity: "Insider activity",
+};
+
+/** Deterministic explanation of the strongest ranked factor, never a catalyst. */
+export function leadingEvidence(
+  subScores: Partial<Record<FactorName, number | null>>,
+): LeadingEvidence | null {
+  const ranked = (Object.entries(subScores) as [FactorName, number | null][])
+    .filter((entry): entry is [FactorName, number] => typeof entry[1] === "number")
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const first = ranked[0];
+  if (!first) return null;
+  const [factor, score] = first;
+  const label = FACTOR_LABELS[factor];
+  return {
+    factor,
+    score,
+    label,
+    summary: `${label} led the relative screen with a ${score.toFixed(2)} factor score.`,
+  };
+}
+
 export type ScoringConfig = {
   weights: Record<FactorName, number>;
   /** minimum composite score to qualify as the daily idea */

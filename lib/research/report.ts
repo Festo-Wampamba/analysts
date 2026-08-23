@@ -1,7 +1,7 @@
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, ne, or } from "drizzle-orm";
 
 import { groqJson } from "@/lib/ai/groq";
-import { verifyNumericClaims } from "@/lib/ai/guards";
+import { verifyNarrativeClaims, verifyNumericClaims } from "@/lib/ai/guards";
 import {
   modelNarrativeSchema,
   type ModelResearchNarrative,
@@ -38,11 +38,12 @@ function findExcessDecimalNumbers(text: string): string[] {
 }
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const FALLBACK_CACHE_TTL_MS = 15 * 60 * 1000;
 const QUOTE_FRESHNESS_MS = 15 * 60 * 1000;
 const NEWS_LOOKBACK_DAYS = 30;
 
 export class ReportError extends Error {
-  readonly code: "unknown_ticker" | "sources_unavailable" | "unverifiable_numbers";
+  readonly code: "unknown_ticker" | "sources_unavailable" | "unverifiable_numbers" | "unverifiable_claims";
   readonly details?: unknown;
 
   constructor(
@@ -166,12 +167,17 @@ async function generateVerifiedNarrative(
     );
     const text = narrativeToText(result.data);
     const guard = verifyNumericClaims(text, allowlist);
+    const claimGuard = verifyNarrativeClaims(text, {
+      ticker: facts.ticker,
+      peerTickers: facts.peers,
+      analystRecommendations: facts.analystRecommendations,
+    });
     const excessDecimals = findExcessDecimalNumbers(text);
-    return { result, guard, excessDecimals };
+    return { result, guard, claimGuard, excessDecimals };
   };
 
   const first = await attempt(buildResearchUserPrompt(facts));
-  if (first.guard.ok && first.excessDecimals.length === 0) {
+  if (first.guard.ok && first.claimGuard.ok && first.excessDecimals.length === 0) {
     return {
       narrative: { ...first.result.data, peers },
       generated: first.result.meta,
@@ -183,16 +189,18 @@ async function generateVerifiedNarrative(
   // once the specific offending strings are quoted back at them.
   const offending = [
     ...first.guard.violations.map((v) => v.raw),
+    ...first.claimGuard.violations,
     ...first.excessDecimals,
   ];
   const second = await attempt(buildNumericCorrectionPrompt(facts, offending));
-  if (!second.guard.ok || second.excessDecimals.length > 0) {
+  if (!second.guard.ok || !second.claimGuard.ok || second.excessDecimals.length > 0) {
     throw new ReportError(
-      "unverifiable_numbers",
-      "generated report contained figures absent from the sourced facts",
+      second.claimGuard.ok ? "unverifiable_numbers" : "unverifiable_claims",
+      "generated report contained claims absent from or contradicted by the sourced facts",
       {
         violations: [
           ...second.guard.violations.map((v) => v.raw),
+          ...second.claimGuard.violations,
           ...second.excessDecimals,
         ],
       },
@@ -210,9 +218,15 @@ async function generateVerifiedNarrative(
 // prose, or the provider call itself failed (network/HTTP error) — and the
 // shown limitation must name the one that actually happened.
 function fallbackReason(error: unknown): string {
-  return error instanceof ReportError && error.code === "unverifiable_numbers"
+  return error instanceof ReportError &&
+    (error.code === "unverifiable_numbers" || error.code === "unverifiable_claims")
     ? "Model output failed factual verification"
     : "AI narrative generation was unavailable (provider error)";
+}
+
+function formatFact(value: number | undefined, suffix = ""): string | null {
+  if (value === undefined || !Number.isFinite(value)) return null;
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)}${suffix}`;
 }
 
 function deterministicResearchFallback(
@@ -224,31 +238,46 @@ function deterministicResearchFallback(
   model: string;
 } {
   const company = facts.company?.name ?? facts.ticker;
-  const hasNews = !!facts.news?.length;
+  const quote = facts.quote;
+  const pe = formatFact(facts.valuation?.peTTM);
+  const revenueGrowth = formatFact(facts.growth?.revenueGrowthTTMYoy, "%");
+  const operatingMargin = formatFact(facts.profitability?.operatingMarginTTM, "%");
+  const debtToEquity = formatFact(facts.balanceSheet?.debtToEquityQuarterly);
+  const latestNews = facts.news?.[0];
   const reason = fallbackReason(error);
   return {
     narrative: {
-      overview: `${company} is presented from the sourced company profile and market-data snapshot available to this report.`,
+      overview: quote
+        ? `${company} (${facts.ticker}) last traded at ${formatFact(quote.price)} ${facts.company?.currency ?? "USD"}, ${quote.change.direction === "negative" ? "down" : "up"} ${formatFact(Math.abs(quote.changePercent.value), "%")} versus the prior close in the sourced quote.`
+        : `${company} (${facts.ticker}) has sourced company-profile coverage, but a usable current quote was not available for this report.`,
       businessModel:
-        "Use the company profile and filing-derived financials to assess how the business earns revenue; source coverage may not describe every segment.",
+        facts.company?.industry
+          ? `${company} is classified by the source provider in ${facts.company.industry}. The available profile identifies the company and market classification but does not provide enough segment detail to make a more specific revenue-model claim.`
+          : "The available provider profile does not contain sufficient business-model detail for a more specific deterministic description.",
       financialPerformance:
-        "Reported financial values should be read directly from the sourced financial table and compared on matching fiscal periods.",
+        [revenueGrowth && `Sourced trailing revenue growth is ${revenueGrowth}.`, operatingMargin && `Sourced operating margin is ${operatingMargin}.`, "Filing-derived annual figures are shown only when period and filing coverage is compatible."].filter(Boolean).join(" ") || "No compatible sourced growth or profitability metric was available for deterministic financial commentary.",
       balanceSheet:
-        "Balance-sheet conclusions are limited to the available sourced liquidity and leverage measures.",
+        debtToEquity
+          ? `The sourced quarterly debt-to-equity measure is ${debtToEquity}. Liquidity and leverage conclusions remain limited to the reported ratio coverage.`
+          : "No compatible leverage ratio was available, so the report does not make a deterministic balance-sheet conclusion.",
       valuation:
-        "The valuation table shows the available market multiples without adding a model-derived target price.",
+        pe
+          ? `The sourced trailing P/E is ${pe}. This report presents that observed multiple without a model-derived target price or unsupported historical comparison.`
+          : "No sourced trailing valuation multiple was available, so the report does not infer a valuation conclusion.",
       peers: buildPeersNarrative(facts),
-      recentDevelopments: hasNews
-        ? "Recent company-related coverage is listed in the catalyst section and should be verified at the linked source."
+      recentDevelopments: latestNews
+        ? `The latest linked coverage is dated ${latestNews.date} from ${latestNews.source}: ${latestNews.headline}`
         : "No relevant recent company coverage was available from the configured source.",
       growthDrivers:
-        "Potential growth drivers should be evaluated against the sourced growth, profitability, and market-position evidence.",
-      catalysts: hasNews
-        ? "Relevant dated company developments and scheduled earnings are the primary observable catalysts."
+        revenueGrowth
+          ? `The observable growth input is ${revenueGrowth} trailing revenue growth. Whether that persists requires future filings and cannot be assumed from this snapshot alone.`
+          : "No sourced growth-rate field was available, so no deterministic growth driver is asserted.",
+      catalysts: latestNews
+        ? `The dated catalyst is the ${latestNews.date} ${latestNews.source} coverage linked in this report. Its implications should be verified at the original source.`
         : "Scheduled earnings are the primary dated catalyst available to this report.",
       risks: [
-        "Market-data and filing coverage can be incomplete or delayed.",
-        "Relative valuation and momentum can change before the next report refresh.",
+        "Market-data, news, and filing coverage can be incomplete or delayed.",
+        "Observed valuation, growth, and momentum inputs can change before the next refresh.",
       ],
       scenarios: [
         { label: "bull", summary: "The constructive case requires operating strengths and relevant catalysts to develop favorably." },
@@ -256,7 +285,7 @@ function deterministicResearchFallback(
         { label: "bear", summary: "The adverse case reflects weakening fundamentals, expectations, or company-specific developments." },
       ],
       thesis:
-        "The investment case should be based on the sourced operating evidence, valuation context, and identified risks rather than generated forecasts.",
+        `${company} should be assessed from the sourced ${pe ? `P/E of ${pe}` : "valuation coverage"}${revenueGrowth ? ` and trailing revenue growth of ${revenueGrowth}` : ""}. The current evidence is descriptive rather than a forecast and is constrained by the available provider fields. The stance would change if a later filing or linked company development materially changes those sourced inputs.`,
       limitations: [`${reason}, so deterministic explanatory text is shown.`],
     },
     generated: {
@@ -278,6 +307,10 @@ async function readCachedReport(ticker: string) {
       and(
         eq(schema.reportsCache.ticker, ticker),
         gt(schema.reportsCache.expiresAt, new Date()),
+        or(
+          ne(schema.reportsCache.model, "deterministic-safety-fallback"),
+          gt(schema.reportsCache.generatedAt, new Date(Date.now() - FALLBACK_CACHE_TTL_MS)),
+        ),
       ),
     )
     .orderBy(desc(schema.reportsCache.generatedAt))
@@ -369,7 +402,10 @@ export async function getResearchReport(
     narrative,
     model,
     generatedAt,
-    expiresAt: new Date(generatedAt.getTime() + CACHE_TTL_MS),
+    expiresAt: new Date(
+      generatedAt.getTime() +
+        (model === "deterministic-safety-fallback" ? FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS),
+    ),
   });
 
   return {

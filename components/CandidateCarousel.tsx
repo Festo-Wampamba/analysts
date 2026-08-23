@@ -9,6 +9,7 @@ import {
   type CandidatePreview,
 } from "@/components/CandidateResearchPreview";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
+import { removeStatementDashes } from "@/lib/domain/text";
 
 type Candidate = LatestIdea["candidates"][number];
 
@@ -34,6 +35,8 @@ export function CandidateCarousel({
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
   const [paused, setPaused] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(ROTATION_SECONDS);
+  const [refreshStale, setRefreshStale] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(!initialPreview);
   const trackRef = useRef<HTMLDivElement>(null);
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
@@ -45,7 +48,7 @@ export function CandidateCarousel({
   }, [selected?.ticker]);
 
   useEffect(() => {
-    if (!canRotate || paused) return undefined;
+    if (!canRotate || paused || previewLoading) return undefined;
     const timer = window.setInterval(() => {
       setSecondsRemaining((remaining) => {
         if (remaining > 1) return remaining - 1;
@@ -54,7 +57,7 @@ export function CandidateCarousel({
       });
     }, 1_000);
     return () => window.clearInterval(timer);
-  }, [canRotate, candidates.length, paused]);
+  }, [canRotate, candidates.length, paused, previewLoading]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -73,6 +76,7 @@ export function CandidateCarousel({
           );
           if (!normalized.length) return;
 
+          setRefreshStale(false);
           setCandidates(normalized);
           setSelectedIndex((current) => {
             const matching = normalized.findIndex((candidate) => candidate.ticker === selectedTickerRef.current);
@@ -81,7 +85,9 @@ export function CandidateCarousel({
         })
         .catch(() => {
           // The already-rendered queue remains useful if a background refresh
-          // is unavailable; no error should interrupt research reading.
+          // is unavailable; make that retained snapshot explicit instead of
+          // silently presenting it as current.
+          setRefreshStale(true);
         });
     }, 60_000);
     return () => window.clearInterval(timer);
@@ -179,13 +185,14 @@ export function CandidateCarousel({
         <div>
           <span>Now viewing</span>
           <strong>{selected.ticker}</strong>
-          <p>{selected.catalyst ?? "Factor detail will be available in the sourced report."}</p>
+          <p>{selected.catalyst ? removeStatementDashes(selected.catalyst) : "Factor detail will be available in the sourced report."}</p>
         </div>
         <Link className="button" href={`/research/${selected.ticker}`}>
           Open full sourced report
         </Link>
       </div>
-      <CandidateResearchPreview ticker={selected.ticker} initial={initialPreview} />
+      {refreshStale && <p className="carousel-refresh-note" role="status">Candidate refresh is temporarily unavailable. Showing the last verified queue.</p>}
+      <CandidateResearchPreview ticker={selected.ticker} initial={initialPreview} onLoadingChange={setPreviewLoading} />
     </section>
   );
 }

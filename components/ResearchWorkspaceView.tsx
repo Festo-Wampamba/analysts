@@ -3,6 +3,7 @@ import { LiveMarketStatus } from "@/components/LiveMarketStatus";
 import { LocalizedDateTime, dateTimeOptions } from "@/components/LocalizedDateTime";
 import { ReportNav } from "@/components/ReportNav";
 import { TickerSearch } from "@/components/TickerSearch";
+import { removeStatementDashes } from "@/lib/domain/text";
 import Link from "next/link";
 import type { Provenance } from "@/lib/domain/provenance";
 import type { FinancialValue } from "@/lib/source/sec";
@@ -32,8 +33,24 @@ export function Panel({ children, className = "" }: { children: React.ReactNode;
   return <div className={`glass-panel ${className}`}>{children}</div>;
 }
 
+export function fallbackBannerText(
+  limitations: string[] | undefined,
+  subject: "report" | "daily idea",
+): string {
+  const limitation = limitations?.join(" ").toLowerCase() ?? "";
+  if (limitation.includes("provider error")) {
+    return `Groq was unavailable when this ${subject} was generated. Showing sourced data and deterministic explanations.`;
+  }
+  if (limitation.includes("factual verification")) {
+    return `Groq output failed factual verification when this ${subject} was generated. Showing sourced data and deterministic explanations.`;
+  }
+  return subject === "daily idea"
+    ? "This daily idea is using deterministic sourced explanations. Groq was not accepted for this narrative."
+    : "This report is using deterministic sourced explanations. Groq was not accepted for this narrative.";
+}
+
 function formatMoney(value: number | undefined, currency = "USD"): string {
-  if (value === undefined || !Number.isFinite(value)) return "—";
+  if (value === undefined || !Number.isFinite(value)) return "Unavailable";
   const safeCurrency = /^[A-Z]{3}$/.test(currency.toUpperCase()) ? currency.toUpperCase() : "USD";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -44,24 +61,36 @@ function formatMoney(value: number | undefined, currency = "USD"): string {
 }
 
 function formatCompact(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return "—";
+  if (value === undefined || !Number.isFinite(value)) return "Unavailable";
   return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(value);
 }
 
 function formatMetric(value: number | undefined, suffix = ""): string {
-  if (value === undefined || !Number.isFinite(value)) return "—";
+  if (value === undefined || !Number.isFinite(value)) return "Unavailable";
   return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)}${suffix}`;
 }
 
 function changeDetail(value: FinancialValue | undefined): { detail: string; tone: Tone } {
   if (!value || value.previousValue === undefined || value.previousValue === 0) {
-    return { detail: "—", tone: "neutral" };
+    return { detail: "Unavailable", tone: "neutral" };
   }
   const percent = ((value.value - value.previousValue) / Math.abs(value.previousValue)) * 100;
   return {
     detail: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent).toFixed(1)}%`,
     tone: percent >= 0 ? "up" : "down",
   };
+}
+
+function annualHistoryValue(
+  values: FinancialValue[] | undefined,
+  periodEnd: string,
+  currency: string,
+): string {
+  const value = values?.find((item) => item.periodEnd === periodEnd);
+  if (!value) return "Unavailable";
+  return value.unit === "USD/shares"
+    ? formatMoney(value.value, currency)
+    : formatMoney(value.value, currency);
 }
 
 function SectionHeading({ id, number, title }: { id: string; number: string; title: string }) {
@@ -123,10 +152,10 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
   const currency = facts.company?.currency ?? "USD";
   const fallback = generated.status === "fallback";
   const overviewMetrics: Metric[] = [
-    { label: "Market cap", value: facts.company?.marketCapMillions === undefined ? "—" : formatMoney(facts.company.marketCapMillions * 1_000_000, currency) },
-    { label: "Shares out.", value: facts.company?.sharesOutstandingMillions === undefined ? "—" : formatCompact(facts.company.sharesOutstandingMillions * 1_000_000) },
-    { label: "Exchange", value: facts.company?.exchange ?? "—" },
-    { label: "IPO", value: facts.company?.ipo ?? "—" },
+    { label: "Market cap", value: facts.company?.marketCapMillions === undefined ? "Unavailable" : formatMoney(facts.company.marketCapMillions * 1_000_000, currency) },
+    { label: "Shares out.", value: facts.company?.sharesOutstandingMillions === undefined ? "Unavailable" : formatCompact(facts.company.sharesOutstandingMillions * 1_000_000) },
+    { label: "Exchange", value: facts.company?.exchange ?? "Unavailable" },
+    { label: "IPO", value: facts.company?.ipo ?? "Unavailable" },
     { label: "52-week high", value: formatMoney(facts.momentum?.week52High, currency) },
     { label: "52-week low", value: formatMoney(facts.momentum?.week52Low, currency) },
   ];
@@ -145,6 +174,20 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
         return { label: label as string, value: value?.unit === "USD/shares" ? formatMoney(value.value, currency) : formatMoney(value?.value, currency), ...change };
       })
     : [];
+  const historySeries = financials
+    ? [
+        ["Revenue", financials.annualHistory.revenue],
+        ["Operating income", financials.annualHistory.operatingIncome],
+        ["Net income", financials.annualHistory.netIncome],
+        ["Diluted EPS", financials.annualHistory.dilutedEps],
+        ["Operating cash flow", financials.annualHistory.operatingCashFlow],
+        ["Capital expenditure", financials.annualHistory.capitalExpenditure],
+        ["Free cash flow", financials.annualHistory.freeCashFlow],
+      ].filter((entry): entry is [string, FinancialValue[]] => (entry[1]?.length ?? 0) >= 2)
+    : [];
+  const historyPeriods = [...new Set(
+    historySeries.flatMap(([, values]) => values.map((value) => value.periodEnd)),
+  )].sort((a, b) => b.localeCompare(a)).slice(0, 5);
   const valuationMetrics: Metric[] = [
     { label: "P/E (TTM)", value: formatMetric(facts.valuation?.peTTM) },
     { label: "P/S (TTM)", value: formatMetric(facts.valuation?.psTTM) },
@@ -159,7 +202,7 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
     { label: "Quick ratio (quarterly)", value: formatMetric(facts.balanceSheet?.quickRatioQuarterly) },
     { label: "ROE (TTM)", value: formatMetric(facts.profitability?.roeTTM, "%") },
     { label: "ROA (TTM)", value: formatMetric(facts.profitability?.roaTTM, "%") },
-  ].filter((metric) => metric.value !== "—");
+  ].filter((metric) => metric.value !== "Unavailable");
   const rawProvenance = [...report.provenance, ...additionalProvenance].filter(
     (item, index, all) => all.findIndex((candidate) => candidate.provider === item.provider && candidate.endpoint === item.endpoint && candidate.fetchedAt === item.fetchedAt) === index,
   );
@@ -172,34 +215,34 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
       <article className="report-column">
         <header className="research-hero">
           <div className="hero-meta"><FactLabel>Ticker research</FactLabel><span>Generated <LocalizedDateTime value={generated.generatedAt} options={dateTimeOptions} />{report.cached ? " · cached narrative" : ""}</span></div>
-          {fallback && <p className="fallback-banner" role="status"><SparkIcon className="chip-icon" />AI narrative temporarily unavailable — showing sourced data only. Narrative sections below contain deterministic explanatory text.</p>}
+          {fallback && <p className="fallback-banner" role="status"><SparkIcon className="chip-icon" />{fallbackBannerText(generated.limitations ?? narrative.limitations, "report")}</p>}
           <div className="hero-title-row"><h1>{facts.ticker}</h1><div><strong>{facts.company?.name ?? facts.ticker}</strong><span>{[facts.company?.exchange, facts.company?.industry, facts.company?.country].filter(Boolean).join(" · ") || "Company profile unavailable"}</span></div></div>
           <div className="hero-profile-grid">
             <div className="quote-card"><FactLabel>Finnhub · Quote</FactLabel><div className="quote-line"><strong>{formatMoney(quotePrice, currency)}</strong>{quoteChange !== undefined && <span className={quoteChange >= 0 ? "trend-up" : "trend-down"}>{quoteChange >= 0 ? "▲" : "▼"} {Math.abs(quoteChange).toFixed(2)}%</span>}</div><small>As of <LocalizedDateTime value={primaryQuote?.quoteAsOf} options={dateTimeOptions} /> · prev close {formatMoney(primaryQuote?.previousClose ?? facts.quote?.previousClose, currency)}</small></div>
-            <Panel className="read-card"><span className="read-card__title">How to read this report</span><span><SearchIcon className="chip-icon" />Provider icon — sourced fact with a named provider</span><span><SparkIcon className="chip-icon" />Spark icon — generated or deterministic narrative</span></Panel>
+            <Panel className="read-card"><span className="read-card__title">How to read this report</span><span><SearchIcon className="chip-icon" />Provider icon: sourced fact with a named provider</span><span><SparkIcon className="chip-icon" />Spark icon: generated or deterministic narrative</span></Panel>
           </div>
           <PriceChart ticker={facts.ticker} currency={currency} initial={chart} />
         </header>
 
-        <section className="report-section" id="overview"><SectionHeading id="overview" number="01" title="Overview" /><MetricPanel label="Finnhub · Company profile" metrics={overviewMetrics} /><AiPanel fallback={fallback}><p>{narrative.overview}</p></AiPanel></section>
+        <section className="report-section" id="overview"><SectionHeading id="overview" number="01" title="Overview" /><MetricPanel label="Finnhub · Company profile" metrics={overviewMetrics} /><AiPanel fallback={fallback}><p>{removeStatementDashes(narrative.overview)}</p></AiPanel></section>
 
-        <section className="report-section" id="business-model"><SectionHeading id="business-model" number="02" title="Business model & competitive position" /><AiPanel fallback={fallback}><p>{narrative.businessModel}</p></AiPanel></section>
+        <section className="report-section" id="business-model"><SectionHeading id="business-model" number="02" title="Business model & competitive position" /><AiPanel fallback={fallback}><p>{removeStatementDashes(narrative.businessModel)}</p></AiPanel></section>
 
-        <section className="report-section" id="financials"><SectionHeading id="financials" number="03" title="Financials" />{financials ? <Panel className="financial-panel"><FactLabel>SEC · Annual filing · {financials.periodEnd}</FactLabel><div className="financial-table">{financialRows.map((row) => <div className="financial-row" key={row.label}><span>{row.label}</span><strong>{row.value}</strong><em className={row.tone === "up" ? "trend-up" : row.tone === "down" ? "trend-down" : "trend-neutral"}>{row.detail}</em></div>)}</div></Panel> : <Panel className="unavailable-panel"><FactLabel>SEC · Unavailable</FactLabel><p>Filing-derived financials are unavailable. The rest of the report remains usable.</p></Panel>}{ratioMetrics.length > 0 && <MetricPanel label="Finnhub · Balance-sheet & profitability ratios" metrics={ratioMetrics} />}<AiPanel fallback={fallback}><p>{narrative.financialPerformance}</p><p>{narrative.balanceSheet}</p><small className="prose-caveat">Figures cited in generated prose are sourced tiles above; wording is AI-generated.</small></AiPanel></section>
+        <section className="report-section" id="financials"><SectionHeading id="financials" number="03" title="Financials" />{financials ? <><Panel className="financial-panel"><FactLabel>SEC · Annual filing · {financials.periodEnd}</FactLabel><div className="financial-table">{financialRows.map((row) => <div className="financial-row" key={row.label}><span>{row.label}</span><strong>{row.value}</strong><em className={row.tone === "up" ? "trend-up" : row.tone === "down" ? "trend-down" : "trend-neutral"}>{row.detail}</em></div>)}</div>{!financials.freeCashFlowAvailability.available && <p className="financial-unavailable" role="status">Free cash flow unavailable: {removeStatementDashes(financials.freeCashFlowAvailability.reason ?? "No reason was provided by the filing source.")}</p>}</Panel>{historyPeriods.length >= 2 && <Panel className="financial-panel financial-history-panel"><FactLabel>SEC · Annual trend · up to five fiscal years</FactLabel><p className="financial-history-note">Each observation is a reported annual 10-K fact for the shown period; blanks mean the filing did not provide a compatible fact.</p><div className="financial-history" role="table" aria-label="Annual financial history"><div className="financial-history__row financial-history__row--head" role="row"><span role="columnheader">Metric</span>{historyPeriods.map((period) => <span role="columnheader" key={period}>{period.slice(0, 4)}</span>)}</div>{historySeries.map(([label, values]) => <div className="financial-history__row" role="row" key={label}><strong role="rowheader">{label}</strong>{historyPeriods.map((period) => <span role="cell" key={period}>{annualHistoryValue(values, period, currency)}</span>)}</div>)}</div></Panel>}</> : <Panel className="unavailable-panel"><FactLabel>SEC · Unavailable</FactLabel><p>Filing-derived financials are unavailable. The rest of the report remains usable.</p></Panel>}{ratioMetrics.length > 0 && <MetricPanel label="Finnhub · Balance-sheet & profitability ratios" metrics={ratioMetrics} />}<AiPanel fallback={fallback}><p>{removeStatementDashes(narrative.financialPerformance)}</p><p>{removeStatementDashes(narrative.balanceSheet)}</p><small className="prose-caveat">Figures cited in generated prose are sourced tiles above; wording is AI-generated.</small></AiPanel></section>
 
-        <section className="report-section" id="valuation"><SectionHeading id="valuation" number="04" title="Valuation" /><MetricPanel label="Finnhub · Basic financials" metrics={valuationMetrics} className="metric-panel--valuation" /><AiPanel fallback={fallback}><p>{narrative.valuation}</p></AiPanel></section>
+        <section className="report-section" id="valuation"><SectionHeading id="valuation" number="04" title="Valuation" /><MetricPanel label="Finnhub · Basic financials" metrics={valuationMetrics} className="metric-panel--valuation" /><AiPanel fallback={fallback}><p>{removeStatementDashes(narrative.valuation)}</p></AiPanel></section>
 
-        <section className="report-section" id="peers"><SectionHeading id="peers" number="05" title="Peers" /><Panel className="peer-panel"><FactLabel>Finnhub · Cached peer snapshots</FactLabel><div className="peer-table"><div className="peer-row peer-row--head"><span>Ticker</span><span>Price</span><span>P/E</span><span>1y</span><span>Mkt cap</span></div>{peers.map((peer) => <div className="peer-row" key={peer.ticker}><strong><Link href={`/research/${peer.ticker}`}>{peer.ticker}</Link></strong><span>{formatMoney(peer.price, currency)}</span><span>{formatMetric(peer.pe)}</span><span className={(peer.oneYearReturn ?? 0) >= 0 ? "trend-up" : "trend-down"}>{peer.oneYearReturn === undefined ? "—" : `${peer.oneYearReturn >= 0 ? "+" : ""}${peer.oneYearReturn.toFixed(1)}%`}</span><span>{peer.marketCapMillions === undefined ? "—" : formatMoney(peer.marketCapMillions * 1_000_000, currency)}</span></div>)}</div></Panel><Panel className="ai-panel"><FactLabel>Server-built · from the peer table above</FactLabel><p>{narrative.peers}</p></Panel></section>
+        <section className="report-section" id="peers"><SectionHeading id="peers" number="05" title="Peers" /><Panel className="peer-panel"><FactLabel>Finnhub · Cached peer snapshots</FactLabel><div className="peer-table"><div className="peer-row peer-row--head"><span>Ticker</span><span>Price</span><span>P/E</span><span>1y</span><span>Mkt cap</span></div>{peers.map((peer) => <div className="peer-row" key={peer.ticker}><strong><Link href={`/research/${peer.ticker}`}>{peer.ticker}</Link></strong><span>{formatMoney(peer.price, currency)}</span><span>{formatMetric(peer.pe)}</span><span className={(peer.oneYearReturn ?? 0) >= 0 ? "trend-up" : "trend-down"}>{peer.oneYearReturn === undefined ? "Unavailable" : `${peer.oneYearReturn >= 0 ? "+" : ""}${peer.oneYearReturn.toFixed(1)}%`}</span><span>{peer.marketCapMillions === undefined ? "Unavailable" : formatMoney(peer.marketCapMillions * 1_000_000, currency)}</span></div>)}</div></Panel><Panel className="ai-panel"><FactLabel>Server-built · from the peer table above</FactLabel><p>{removeStatementDashes(narrative.peers)}</p></Panel></section>
 
-        <section className="report-section" id="growth-drivers"><SectionHeading id="growth-drivers" number="06" title="Growth drivers" /><AiPanel fallback={fallback}><p>{narrative.growthDrivers}</p></AiPanel></section>
+        <section className="report-section" id="growth-drivers"><SectionHeading id="growth-drivers" number="06" title="Growth drivers" /><AiPanel fallback={fallback}><p>{removeStatementDashes(narrative.growthDrivers)}</p></AiPanel></section>
 
-        <section className="report-section" id="catalysts"><SectionHeading id="catalysts" number="07" title="Catalysts" />{earnings.length ? <Panel className="catalyst-panel"><FactLabel>Finnhub · Earnings calendar</FactLabel>{earnings.slice(0, 2).map((event) => <div className="earnings-event" key={`${event.date}-${event.quarter}`}><strong>{event.date}</strong><span>{event.year && event.quarter ? `Fiscal Q${event.quarter} ${event.year}` : "Scheduled earnings"}{event.hour ? ` · ${event.hour}` : ""}</span><small>EPS estimate {event.epsEstimate == null ? "unavailable" : formatMoney(event.epsEstimate, currency)} · revenue estimate {event.revenueEstimate == null ? "unavailable" : formatMoney(event.revenueEstimate, currency)}</small></div>)}</Panel> : <Panel className="unavailable-panel"><FactLabel>Finnhub · Earnings calendar</FactLabel><p>No upcoming earnings event was returned for this ticker.</p></Panel>}<AiPanel fallback={fallback}><p>{narrative.recentDevelopments}</p><p>{narrative.catalysts}</p>{facts.news?.slice(0, 3).map((item) => <div className="news-item" key={item.url}><time>{item.date}</time><a href={item.url} target="_blank" rel="noreferrer">{item.headline}</a><small>{item.source}</small></div>)}</AiPanel></section>
+        <section className="report-section" id="catalysts"><SectionHeading id="catalysts" number="07" title="Catalysts" />{earnings.length ? <Panel className="catalyst-panel"><FactLabel>Finnhub · Earnings calendar</FactLabel>{earnings.slice(0, 2).map((event) => <div className="earnings-event" key={`${event.date}-${event.quarter}`}><strong>{event.date}</strong><span>{event.year && event.quarter ? `Fiscal Q${event.quarter} ${event.year}` : "Scheduled earnings"}{event.hour ? ` · ${event.hour}` : ""}</span><small>EPS estimate {event.epsEstimate == null ? "unavailable" : formatMoney(event.epsEstimate, currency)} · revenue estimate {event.revenueEstimate == null ? "unavailable" : formatMoney(event.revenueEstimate, currency)}</small></div>)}</Panel> : <Panel className="unavailable-panel"><FactLabel>Finnhub · Earnings calendar</FactLabel><p>No upcoming earnings event was returned for this ticker.</p></Panel>}<AiPanel fallback={fallback}><p>{removeStatementDashes(narrative.recentDevelopments)}</p><p>{removeStatementDashes(narrative.catalysts)}</p>{facts.news?.slice(0, 3).map((item) => <div className="news-item" key={item.url}><time>{item.date}</time><a href={item.url} target="_blank" rel="noreferrer">{item.headline}</a><small>{item.source}</small></div>)}</AiPanel></section>
 
-        <section className="report-section" id="risks"><SectionHeading id="risks" number="08" title="Risks" /><AiPanel fallback={fallback}><div className="narrative-rows">{narrative.risks.map((risk, index) => <div key={risk}><strong>Risk {String(index + 1).padStart(2, "0")}</strong><span>{risk}</span></div>)}</div></AiPanel></section>
+        <section className="report-section" id="risks"><SectionHeading id="risks" number="08" title="Risks" /><AiPanel fallback={fallback}><div className="narrative-rows">{narrative.risks.map((risk, index) => <div key={risk}><strong>Risk {String(index + 1).padStart(2, "0")}</strong><span>{removeStatementDashes(risk)}</span></div>)}</div></AiPanel></section>
 
-        <section className="report-section" id="cases"><SectionHeading id="cases" number="09" title="Bull / Base / Bear" /><div className="scenario-grid">{narrative.scenarios.map((scenario) => <Panel className={`scenario-card scenario-card--${scenario.label}`} key={scenario.label}>{fallback ? <FactLabel tone="fallback">Fallback · {scenario.label}</FactLabel> : <FactLabel tone="ai">AI-generated · {scenario.label}</FactLabel>}<div className="scenario-price"><strong>{scenario.label}</strong></div><p>{scenario.summary}</p><small>Qualitative scenario · no model-generated target</small></Panel>)}</div></section>
+        <section className="report-section" id="cases"><SectionHeading id="cases" number="09" title="Bull / Base / Bear" /><div className="scenario-grid">{narrative.scenarios.map((scenario) => <Panel className={`scenario-card scenario-card--${scenario.label}`} key={scenario.label}>{fallback ? <FactLabel tone="fallback">Fallback · {scenario.label}</FactLabel> : <FactLabel tone="ai">AI-generated · {scenario.label}</FactLabel>}<div className="scenario-price"><strong>{scenario.label}</strong></div><p>{removeStatementDashes(scenario.summary)}</p><small>Qualitative scenario · no model-generated target</small></Panel>)}</div></section>
 
-        <section className="report-section" id="thesis"><SectionHeading id="thesis" number="10" title="Investment thesis" /><Panel className="thesis-panel"><div className="thesis-head">{fallback ? <FactLabel tone="fallback">Fallback · sourced data only</FactLabel> : <FactLabel tone="ai">AI-generated</FactLabel>}{confidence !== undefined && confidence !== null && <span>coverage confidence {confidence.toFixed(2)}</span>}</div>{confidence !== undefined && confidence !== null && <div className="confidence-bar"><span style={{ width: `${Math.max(0, Math.min(1, confidence)) * 100}%` }} /></div>}<p>{narrative.thesis}</p><small>Model: {generated.modelLabel ?? "unlabelled"} · sourced facts and generated prose remain separately identified</small></Panel></section>
+        <section className="report-section" id="thesis"><SectionHeading id="thesis" number="10" title="Investment thesis" /><Panel className="thesis-panel"><div className="thesis-head">{fallback ? <FactLabel tone="fallback">Fallback · sourced data only</FactLabel> : <FactLabel tone="ai">AI-generated</FactLabel>}{confidence !== undefined && confidence !== null && <span>coverage confidence {confidence.toFixed(2)}</span>}</div>{confidence !== undefined && confidence !== null && <div className="confidence-bar"><span style={{ width: `${Math.max(0, Math.min(1, confidence)) * 100}%` }} /></div>}<p>{removeStatementDashes(narrative.thesis)}</p><small>Model: {generated.modelLabel ?? "unlabelled"} · sourced facts and generated prose remain separately identified</small></Panel></section>
 
         <section className="report-section" id="sources"><SectionHeading id="sources" number="11" title="Sources" /><Panel className="sources-panel"><p className="sources-intro">Every sourced value traces to a provider call or cached provider snapshot. The detailed audit ledger is collapsed to keep the report concise.</p><div className="source-summary" aria-label="Source coverage summary"><div><strong>{providerCount}</strong><span>providers</span></div><div><strong>{provenance.length}</strong><span>unique endpoints</span></div><div><strong>{rawProvenance.length}</strong><span>logged snapshots</span></div></div><details className="source-disclosure"><summary><span>View source audit ledger</span><small>provider · endpoint · viewer-local time · status</small></summary><div className="source-list">{provenance.map((source, index) => <SourceRow source={source} key={`${source.provider}-${source.endpoint}-${index}`} />)}</div></details>{failedSections.length > 0 && <div className="failed-note"><span>Partial</span><p>{failedSections.map((failure) => `${failure.section}: ${failure.reason}`).join(" · ")}</p></div>}</Panel></section>
       </article>
@@ -208,7 +251,15 @@ export function ResearchWorkspaceView({ workspace, confidence }: { workspace: Re
 }
 
 function SourceRow({ source }: { source: SourceSummary }) {
-  return <div className={`source-row ${source.status === "failed" ? "is-failed" : ""}`}><span>{source.provider}</span><strong>{source.endpoint ?? "provider snapshot"}{source.occurrences > 1 ? ` · ${source.occurrences} snapshots` : ""}</strong><LocalizedDateTime value={source.providerTimestamp ?? source.fetchedAt} options={dateTimeOptions} /><b>{source.httpStatus ?? source.status}</b></div>;
+  const href = source.provider === "sec" && source.endpoint
+    ? `https://data.sec.gov${source.endpoint}`
+    : source.provider === "finnhub"
+      ? "https://finnhub.io/docs/api"
+      : source.provider === "groq"
+        ? "https://console.groq.com/docs"
+        : undefined;
+  const endpoint = <>{source.endpoint ?? "provider snapshot"}{source.occurrences > 1 ? ` · ${source.occurrences} snapshots` : ""}</>;
+  return <div className={`source-row ${source.status === "failed" ? "is-failed" : ""}`}><span>{source.provider}</span><strong>{href ? <a href={href} target="_blank" rel="noreferrer" aria-label={`Open ${source.provider} source documentation for ${source.endpoint ?? "provider snapshot"}`}>{endpoint}</a> : endpoint}</strong><LocalizedDateTime value={source.providerTimestamp ?? source.fetchedAt} options={dateTimeOptions} /><b>{source.httpStatus ?? source.status}</b></div>;
 }
 
 export function AmbientLayer() {

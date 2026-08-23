@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Analysts — Daily Idea Engine",
+  title: "Analysts | Daily Idea Engine",
   description: "Cross-sectional equity screening with AI-generated research narratives.",
 };
 

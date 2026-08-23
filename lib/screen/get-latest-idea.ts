@@ -2,7 +2,7 @@ import { desc, eq, isNotNull } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
 import type { DailyIdeaPayload } from "./types";
-import { coverageForSubScores } from "./score";
+import { coverageForSubScores, leadingEvidence } from "./score";
 
 export type LatestIdea = {
   tradingDate: string;
@@ -13,6 +13,13 @@ export type LatestIdea = {
   threshold: number;
   idea: DailyIdeaPayload | null;
   emailDeliveryError: string | null;
+  delivery: {
+    channel: "email";
+    status: "delivered" | "failed" | "not_attempted";
+    attemptedAt: Date | null;
+    recipient: string | null;
+    retry: "not_needed" | "manual_retry_required" | "not_applicable";
+  };
   run: {
     status: string;
     startedAt: Date;
@@ -41,6 +48,9 @@ export type LatestIdea = {
     compositeScore: number;
     coverage?: number;
     subScores: unknown;
+    leadingFactor: string | null;
+    leadingFactorScore: number | null;
+    leadingEvidence: string;
     catalyst: string | null;
   }[];
 };
@@ -112,6 +122,13 @@ async function loadLatestIdea(): Promise<LatestIdea | null> {
       threshold: Number(latestAttempt.threshold),
       idea: null,
       emailDeliveryError: null,
+      delivery: {
+        channel: "email",
+        status: "not_attempted",
+        attemptedAt: null,
+        recipient: null,
+        retry: "not_applicable",
+      },
       run: null,
       latestAttempt: mapRun(latestAttempt),
       candidates: [],
@@ -138,6 +155,21 @@ async function loadLatestIdea(): Promise<LatestIdea | null> {
     threshold: Number(idea.thresholdAtRun),
     idea: idea.narrative as DailyIdeaPayload | null,
     emailDeliveryError: idea.emailDeliveryError,
+    delivery: {
+      channel: "email",
+      status: idea.ticker === null
+        ? "not_attempted"
+        : idea.emailDeliveryError === null
+          ? "delivered"
+          : "failed",
+      attemptedAt: run?.finishedAt ?? idea.createdAt,
+      recipient: process.env.DAILY_IDEA_TO ? "configured recipient(s)" : null,
+      retry: idea.ticker === null
+        ? "not_applicable"
+        : idea.emailDeliveryError === null
+          ? "not_needed"
+          : "manual_retry_required",
+    },
     run: run && {
       status: run.status,
       startedAt: run.startedAt,
@@ -150,15 +182,21 @@ async function loadLatestIdea(): Promise<LatestIdea | null> {
     latestAttempt: latestAttempt ? mapRun(latestAttempt) : null,
     candidates: candidates
       .sort((a, b) => a.rank - b.rank)
-      .map((c) => ({
+      .map((c) => {
+        const evidence = leadingEvidence(c.subScores as Record<string, number | null>);
+        return {
         rank: c.rank,
         ticker: c.ticker,
         sector: c.sector,
         compositeScore: Number(c.compositeScore),
         coverage: coverageForSubScores(c.subScores as Record<string, number | null>),
         subScores: c.subScores,
+        leadingFactor: evidence?.label ?? null,
+        leadingFactorScore: evidence?.score ?? null,
+        leadingEvidence: evidence?.summary ?? "No factor score was available for this candidate.",
         catalyst: c.catalyst,
-      })),
+      };
+      }),
   };
 }
 

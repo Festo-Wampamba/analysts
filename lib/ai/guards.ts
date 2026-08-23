@@ -17,6 +17,18 @@ export type NumericGuardResult = {
   claims: NumericClaim[];
 };
 
+export type NarrativeClaimGuardResult = {
+  ok: boolean;
+  violations: string[];
+};
+
+/** Context for claims that are meaningful but are not themselves numbers. */
+export type NarrativeClaimContext = {
+  ticker: string;
+  peerTickers?: string[];
+  analystRecommendations?: { hold: number; buy: number; strongBuy: number; sell: number; strongSell: number };
+};
+
 const SUFFIX_MULTIPLIERS: Record<string, number> = {
   k: 1e3,
   m: 1e6,
@@ -114,6 +126,47 @@ export function verifyNumericClaims(
     .map(({ raw, value }) => ({ raw, value }));
 
   return { ok: violations.length === 0, violations, claims };
+}
+
+// Numeric allowlists cannot detect a false statement such as "no holds" or
+// an invented historical-premium comparison. Keep this deliberately narrow:
+// it rejects only assertions for which the sourced snapshot can prove the
+// statement false, plus comparative language unsupported by a history series.
+export function verifyNarrativeClaims(
+  text: string,
+  context: NarrativeClaimContext,
+): NarrativeClaimGuardResult {
+  const violations: string[] = [];
+  const normalized = text.toLowerCase();
+  const recommendations = context.analystRecommendations;
+  if (recommendations) {
+    if (recommendations.hold > 0 && /\b(no|zero)\s+(analyst\s+)?holds?\b/i.test(text)) {
+      violations.push("claim says there are no analyst holds despite sourced hold coverage");
+    }
+    if (recommendations.buy + recommendations.strongBuy > 0 && /\b(no|zero)\s+(strong\s+)?buys?\b/i.test(text)) {
+      violations.push("claim says there are no buy recommendations despite sourced buy coverage");
+    }
+    if (recommendations.sell + recommendations.strongSell > 0 && /\b(no|zero)\s+(strong\s+)?sells?\b/i.test(text)) {
+      violations.push("claim says there are no sell recommendations despite sourced sell coverage");
+    }
+  }
+  if (/\b(historical|historic)\s+(average|mean|multiple|premium|discount)\b/.test(normalized)) {
+    violations.push("historical comparison has no sourced history series in the report facts");
+  }
+
+  const permittedTickerTokens = new Set([
+    context.ticker.toUpperCase(),
+    ...(context.peerTickers ?? []).map((ticker) => ticker.toUpperCase()),
+    "AI", "EPS", "FCF", "SEC", "TTM", "USD", "P", "E",
+  ]);
+  const tickerLikeTokens = text.match(/\b[A-Z]{2,5}\b/g) ?? [];
+  for (const token of tickerLikeTokens) {
+    if (!permittedTickerTokens.has(token)) {
+      violations.push(`ticker-like token ${token} is absent from sourced identity and peer facts`);
+      break;
+    }
+  }
+  return { ok: violations.length === 0, violations };
 }
 
 // Adversarial input sanitization: external text (news headlines, summaries)

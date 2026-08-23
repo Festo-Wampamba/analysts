@@ -17,6 +17,13 @@ const latest: LatestIdea = {
   confidence: 0.9,
   threshold: 0.65,
   emailDeliveryError: null,
+  delivery: {
+    channel: "email",
+    status: "delivered",
+    attemptedAt: new Date("2026-08-19T13:03:00.000Z"),
+    recipient: "configured recipient(s)",
+    retry: "not_needed",
+  },
   candidates: [],
   run: {
     status: "complete",
@@ -106,8 +113,9 @@ describe("DailyIdeaView", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "AI narrative temporarily unavailable — showing sourced data only.",
+      "This daily idea is using deterministic sourced explanations. Groq was not accepted for this narrative.",
     );
+    expect(screen.getByRole("status")).not.toHaveTextContent("—");
     expect(screen.getAllByText(/Fallback/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Verified fallback/)).not.toBeInTheDocument();
   });
@@ -120,6 +128,9 @@ describe("DailyIdeaView", () => {
       compositeScore: 0.8 - index * 0.02,
       coverage: 0.9,
       subScores: { growth: 0.8 - index * 0.02 },
+      leadingFactor: "Growth",
+      leadingFactorScore: 0.8 - index * 0.02,
+      leadingEvidence: `Growth led with a ${(0.8 - index * 0.02).toFixed(2)} factor score.`,
       catalyst: `Catalyst ${index + 1}`,
     }));
     const { container } = render(<DailyIdeaView latest={{ ...latest, candidates }} />);
@@ -138,5 +149,12 @@ describe("DailyIdeaView", () => {
   it("does not call a Friday result stale over the weekend", () => {
     expect(isStale({ ...latest, tradingDate: "2026-08-21" }, new Date("2026-08-24T14:00:00.000Z"))).toBe(false);
     expect(isStale({ ...latest, tradingDate: "2026-08-17" }, new Date("2026-08-20T14:00:00.000Z"))).toBe(true);
+  });
+
+  it("uses the documented schedule for legacy runs without a stored next timestamp", () => {
+    render(<DailyIdeaView latest={latest} />);
+
+    expect(screen.getByText("Weekdays at 13:00 UTC")).toBeInTheDocument();
+    expect(screen.getByText("Delivery attempted")).toBeInTheDocument();
   });
 });

@@ -40,10 +40,47 @@ export type FinancialSnapshot = {
   operatingCashFlow?: FinancialValue;
   capitalExpenditure?: FinancialValue;
   freeCashFlow?: FinancialValue;
+  /**
+   * The FCF calculation is deliberately conservative: it is only available
+   * when operating cash flow and capex come from the same annual filing
+   * period. The explanation is shown beside an unavailable value instead of
+   * inviting the UI or the model to infer one.
+   */
+  freeCashFlowAvailability: { available: boolean; reason?: string };
   cash?: FinancialValue;
   debt?: FinancialValue;
   netCash?: FinancialValue;
+  /** Most recent five annual observations, each retaining SEC filing trace. */
+  annualHistory: Partial<{
+    revenue: FinancialValue[];
+    operatingIncome: FinancialValue[];
+    netIncome: FinancialValue[];
+    dilutedEps: FinancialValue[];
+    operatingCashFlow: FinancialValue[];
+    capitalExpenditure: FinancialValue[];
+    freeCashFlow: FinancialValue[];
+  }>;
 };
+
+/**
+ * Provider-cache rows can outlive the code version that wrote them. Keep old
+ * SEC snapshots readable after adding display-only fields to this contract;
+ * the next cache refresh will replace them with the complete shape.
+ */
+export function normalizeCachedFinancialSnapshot(
+  data: Partial<FinancialSnapshot>,
+): FinancialSnapshot {
+  return {
+    ...data,
+    freeCashFlowAvailability: data.freeCashFlowAvailability ?? {
+      available: data.freeCashFlow !== undefined,
+      reason: data.freeCashFlow === undefined
+        ? "This cached SEC snapshot predates free-cash-flow provenance."
+        : undefined,
+    },
+    annualHistory: data.annualHistory ?? {},
+  } as FinancialSnapshot;
+}
 
 const tickerMapSchema = z.record(
   z.string(),
@@ -154,6 +191,66 @@ function toFinancialValue(
   };
 }
 
+function toFinancialSeries(entries: FactEntry[], unit: string, periodEnd: string): FinancialValue[] {
+  const observations = new Map<string, FactEntry>();
+  for (const entry of entries) {
+    if (entry.end > periodEnd || observations.has(entry.end)) continue;
+    observations.set(entry.end, entry);
+    if (observations.size === 5) break;
+  }
+  return [...observations.values()].map((entry) => ({
+    value: entry.val,
+    unit,
+    periodEnd: entry.end,
+    fiscalYear: entry.fy ?? undefined,
+    form: entry.form,
+    filed: entry.filed,
+    accession: entry.accn,
+  }));
+}
+
+function seriesFor(
+  facts: CompanyFacts,
+  tags: readonly string[],
+  unit: string,
+  periodEnd: string,
+): FinancialValue[] {
+  return toFinancialSeries(annualEntries(facts, tags, unit, periodEnd), unit, periodEnd);
+}
+
+function derivedFreeCashFlowSeries(
+  operatingCashFlow: FinancialValue[],
+  capitalExpenditure: FinancialValue[],
+): FinancialValue[] {
+  const capexByPeriod = new Map(capitalExpenditure.map((value) => [value.periodEnd, value]));
+  return operatingCashFlow.flatMap((cashFlow) => {
+    const capex = capexByPeriod.get(cashFlow.periodEnd);
+    if (!capex) return [];
+    return [{
+      ...cashFlow,
+      value: cashFlow.value - Math.abs(capex.value),
+    }];
+  });
+}
+
+function freeCashFlowAvailability(
+  operatingCashFlow: FinancialValue | undefined,
+  capitalExpenditure: FinancialValue | undefined,
+  freeCashFlow: FinancialValue | undefined,
+): FinancialSnapshot["freeCashFlowAvailability"] {
+  if (freeCashFlow) return { available: true };
+  if (!operatingCashFlow) {
+    return { available: false, reason: "Operating cash flow was not reported in a supported annual SEC fact." };
+  }
+  if (!capitalExpenditure) {
+    return { available: false, reason: "Capital expenditure was not reported in a supported annual SEC fact." };
+  }
+  return {
+    available: false,
+    reason: "Operating cash flow and capital expenditure were reported for different annual periods, so free cash flow was not derived.",
+  };
+}
+
 function samePeriodDerived(
   left: FinancialValue | undefined,
   right: FinancialValue | undefined,
@@ -202,6 +299,8 @@ export function normalizeCompanyFacts(
   const dilutedEps = annualValue(TAGS.dilutedEps, "USD/shares");
   const operatingCashFlow = annualValue(TAGS.operatingCashFlow, "USD");
   const capitalExpenditure = annualValue(TAGS.capitalExpenditure, "USD");
+  const capitalExpenditureAnyPeriod =
+    capitalExpenditure ?? toFinancialValue(annualEntries(facts, TAGS.capitalExpenditure, "USD"), "USD");
   const cash = annualValue(TAGS.cash, "USD");
   const debtParts = [TAGS.debtCurrent, TAGS.debtNoncurrent]
     .map((tags) => annualValue(tags, "USD"))
@@ -228,6 +327,12 @@ export function normalizeCompanyFacts(
     : undefined;
   const freeCashFlow = samePeriodDerived(operatingCashFlow, capitalExpenditure, (a, b) => a - Math.abs(b));
   const netCash = samePeriodDerived(cash, debt, (a, b) => a - b);
+  const operatingCashFlowHistory = seriesFor(facts, TAGS.operatingCashFlow, "USD", periodEnd);
+  const capitalExpenditureHistory = seriesFor(facts, TAGS.capitalExpenditure, "USD", periodEnd);
+  const freeCashFlowHistory = derivedFreeCashFlowSeries(
+    operatingCashFlowHistory,
+    capitalExpenditureHistory,
+  );
   return {
     ticker,
     cik: String(facts.cik).padStart(10, "0"),
@@ -243,9 +348,23 @@ export function normalizeCompanyFacts(
     operatingCashFlow,
     capitalExpenditure,
     freeCashFlow,
+    freeCashFlowAvailability: freeCashFlowAvailability(
+      operatingCashFlow,
+      capitalExpenditureAnyPeriod,
+      freeCashFlow,
+    ),
     cash,
     debt,
     netCash,
+    annualHistory: {
+      revenue: seriesFor(facts, TAGS.revenue, "USD", periodEnd),
+      operatingIncome: seriesFor(facts, TAGS.operatingIncome, "USD", periodEnd),
+      netIncome: seriesFor(facts, TAGS.netIncome, "USD", periodEnd),
+      dilutedEps: seriesFor(facts, TAGS.dilutedEps, "USD/shares", periodEnd),
+      operatingCashFlow: operatingCashFlowHistory,
+      capitalExpenditure: capitalExpenditureHistory,
+      freeCashFlow: freeCashFlowHistory,
+    },
   };
 }
 
@@ -295,7 +414,9 @@ export async function getFinancialSnapshot(
   const symbol = ticker.toUpperCase();
   const cacheKey = { provider: PROVIDER, kind: "companyfacts", ticker: symbol };
   const cached = await readProviderCache<FinancialSnapshot>(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    return { ...cached, data: normalizeCachedFinancialSnapshot(cached.data) };
+  }
 
   const tickerMap = tickerMapSchema.parse(
     await secJson(TICKER_URL, "/files/company_tickers.json", { ...ctx, ticker: symbol }),

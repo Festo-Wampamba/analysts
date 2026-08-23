@@ -52,7 +52,13 @@ export function LiveMarketStatus() {
       // platform state with an alarming single-request error.
       if (nextHealth) setHealth(nextHealth);
     } catch {
-      // Retain the last known platform state and try again on the next cadence.
+      // A first-poll failure needs an explicit state. Later failures retain a
+      // known result, but this must never remain "Checking" indefinitely.
+      setHealth((current) => current ?? {
+        label: "Health check unavailable",
+        degraded: true,
+        title: "Platform health check is temporarily unavailable",
+      });
     }
   }, []);
 

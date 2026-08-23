@@ -32,7 +32,7 @@ function minutesSinceMidnight(parts: Record<string, string>): number {
 
 function closedLabel(timestamp: number): string {
   const parts = easternParts(new Date(timestamp));
-  return `Markets closed — last close ${parts.weekday}, ${parts.month} ${parts.day}`;
+  return `Markets closed. Last close ${parts.weekday}, ${parts.month} ${parts.day}`;
 }
 
 // Keep every live-market surface on the same definition of freshness. The

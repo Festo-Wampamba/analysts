@@ -62,7 +62,7 @@ export function MethodologyAndCosts() {
           <div className="cost-metrics">
             <div><span>One generated report</span><strong>{usd(TYPICAL_REPORT_COST_USD)}</strong><small>up to {usd(TYPICAL_REPORT_COST_USD * 2)} if the numerical-verification retry runs</small></div>
             <div><span>Monthly LLM usage</span><strong>~{usd(TYPICAL_MONTHLY_LLM_COST_USD, 2)}</strong><small>{MONTHLY_REPORT_COUNT} reports; ~{usd(TYPICAL_MONTHLY_LLM_COST_USD * 2, 2)} if every report retries</small></div>
-            <div><span>Estimated total stack</span><strong>~$6–$10 / month</strong><small>current low-volume VPS plus free database and email tiers</small></div>
+            <div><span>Estimated total stack</span><strong>~$6 to $10 / month</strong><small>current low-volume VPS plus free database and email tiers</small></div>
           </div>
           <p className="cost-assumption">Assumes {REPORT_TOKEN_ASSUMPTION.input.toLocaleString("en-US")} uncached input and {REPORT_TOKEN_ASSUMPTION.output.toLocaleString("en-US")} output tokens per report, {MONTHLY_REPORT_ASSUMPTION.scheduledDailyIdeas} scheduled ideas, and {MONTHLY_REPORT_ASSUMPTION.manualResearchReports} manual reports each month. Market-data upgrades, domain, tax, and regional VPS pricing are excluded.</p>
           <div className="pricing-links" aria-label="Pricing references">

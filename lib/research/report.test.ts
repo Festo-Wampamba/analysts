@@ -437,6 +437,10 @@ describe("getResearchReport numeric guard", () => {
 
     expect(insertedReports).toHaveLength(1);
     expect(insertedReports[0].model).toBe("deterministic-safety-fallback");
+    expect(
+      (insertedReports[0].expiresAt as Date).getTime() -
+        (insertedReports[0].generatedAt as Date).getTime(),
+    ).toBe(15 * 60 * 1000);
   });
 
   it("records the factual-verification reason in the fallback limitations", async () => {

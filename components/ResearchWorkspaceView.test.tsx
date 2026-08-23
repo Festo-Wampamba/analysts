@@ -54,6 +54,7 @@ const workspace = {
       generatedAt: "2026-08-23T05:42:00.000Z",
       basedOn: ["quote"],
       modelLabel: "deterministic-safety-fallback",
+      limitations: ["AI narrative generation was unavailable (provider error)."],
       status: "fallback",
     },
     failedProviders: [],
@@ -72,9 +73,10 @@ describe("ResearchWorkspaceView fallback state", () => {
   it("shows an amber fallback banner and keeps peers sourced", () => {
     render(<ResearchWorkspaceView workspace={workspace} confidence={0.9} />);
 
-    expect(screen.getByText(/AI narrative temporarily unavailable/)).toHaveTextContent(
-      "AI narrative temporarily unavailable — showing sourced data only.",
+    expect(screen.getByText(/Groq was unavailable/)).toHaveTextContent(
+      "Groq was unavailable when this report was generated. Showing sourced data and deterministic explanations.",
     );
+    expect(screen.getByText(/Groq was unavailable/)).not.toHaveTextContent("—");
     expect(screen.getAllByText(/Fallback/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Verified fallback/)).not.toBeInTheDocument();
     expect(screen.getByText("Server-built · from the peer table above")).toBeInTheDocument();

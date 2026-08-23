@@ -3,14 +3,14 @@
 import { useState } from "react";
 
 export function CopyThesisButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
   return <button type="button" className="button" onClick={async () => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      setStatus("copied");
+      window.setTimeout(() => setStatus("idle"), 1800);
     } catch {
-      setCopied(false);
+      setStatus("failed");
     }
-  }}>{copied ? "Copied" : "Copy thesis"}</button>;
+  }}>{status === "copied" ? "Copied" : "Copy thesis"}<span className="sr-only" aria-live="polite">{status === "copied" ? "Thesis copied to clipboard." : status === "failed" ? "Could not copy the thesis. Select and copy the text manually." : ""}</span></button>;
 }

@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CandidateCarousel } from "./CandidateCarousel";
 
 const candidates = [
-  { rank: 1, ticker: "NVDA", sector: "Technology", compositeScore: 0.82, coverage: 0.9, subScores: { growth: 0.8 }, catalyst: "Strong revisions" },
-  { rank: 2, ticker: "GOOGL", sector: "Communication Services", compositeScore: 0.76, coverage: 0.8, subScores: { growth: 0.7 }, catalyst: "Growth durable" },
+  { rank: 1, ticker: "NVDA", sector: "Technology", compositeScore: 0.82, coverage: 0.9, subScores: { growth: 0.8 }, leadingFactor: "Growth", leadingFactorScore: 0.8, leadingEvidence: "Growth led the relative screen with a 0.80 factor score.", catalyst: "Strong revisions" },
+  { rank: 2, ticker: "GOOGL", sector: "Communication Services", compositeScore: 0.76, coverage: 0.8, subScores: { growth: 0.7 }, leadingFactor: "Growth", leadingFactorScore: 0.7, leadingEvidence: "Growth led the relative screen with a 0.70 factor score.", catalyst: "Growth durable" },
 ];
 
 function researchPayload(ticker: string) {
@@ -81,6 +81,8 @@ describe("CandidateCarousel", () => {
   it("auto-rotates candidates without scrolling the document", async () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
+    await flushResearchRequest();
+
     expect(screen.getByText("Ranked research queue (2)")).toBeInTheDocument();
     expect(screen.getByText("Auto advance every 5 seconds")).toBeInTheDocument();
     expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("NVDA");
@@ -90,11 +92,33 @@ describe("CandidateCarousel", () => {
       await Promise.resolve();
     });
 
+    await flushResearchRequest();
+
     expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("GOOGL");
     expect(screen.getByText("GOOGL has a sourced research thesis.")).toBeInTheDocument();
     expect(screen.queryByText(/Auto rotation highlighted/)).not.toBeInTheDocument();
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     expect(HTMLElement.prototype.scrollTo).toHaveBeenCalled();
+  });
+
+  it("waits for the active research preview before auto-rotating again", async () => {
+    let resolvePreview: ((value: Response) => void) | undefined;
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/api/daily-idea") return Promise.resolve(response({ candidates }));
+      return new Promise<Response>((resolve) => { resolvePreview = resolve; });
+    });
+    render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
+
+    await act(async () => { await Promise.resolve(); });
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("NVDA");
+
+    await act(async () => {
+      resolvePreview?.(response(researchPayload("NVDA")));
+      await Promise.resolve();
+    });
+    await act(async () => { await vi.advanceTimersByTime(5_000); });
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("GOOGL");
   });
 
   it("allows manual previous and next selection", () => {
@@ -141,6 +165,18 @@ describe("CandidateCarousel", () => {
     expect(screen.getByText("Updated growth evidence")).toBeInTheDocument();
   });
 
+  it("labels the retained queue as stale when a background refresh fails", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/api/daily-idea") return Promise.reject(new Error("offline"));
+      return Promise.resolve(response(researchPayload("NVDA")));
+    });
+    render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+
+    expect(screen.getByRole("status")).toHaveTextContent("last verified queue");
+  });
+
   it("follows the highlighted card and marks the qualifying winner", async () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
     await flushResearchRequest();
@@ -151,7 +187,10 @@ describe("CandidateCarousel", () => {
     await flushResearchRequest();
 
     expect(screen.getByText("GOOGL has a sourced research thesis.")).toBeInTheDocument();
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/research/GOOGL", { cache: "no-store" });
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/research/GOOGL",
+      expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+    );
     expect(screen.getByText("Today's idea").closest("button")).toHaveClass("is-winner");
   });
 });
