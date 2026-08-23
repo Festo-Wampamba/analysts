@@ -23,7 +23,6 @@ const RESEARCH_SHAPE = `{
   "financialPerformance": string,
   "balanceSheet": string,
   "valuation": string,
-  "peers": string,
   "recentDevelopments": string,
   "growthDrivers": string,
   "catalysts": string,

@@ -3,7 +3,8 @@ import { and, desc, eq, gt } from "drizzle-orm";
 import { groqJson } from "@/lib/ai/groq";
 import { verifyNumericClaims } from "@/lib/ai/guards";
 import {
-  researchNarrativeSchema,
+  modelNarrativeSchema,
+  type ModelResearchNarrative,
   type ResearchNarrative,
 } from "@/lib/ai/report-schema";
 import { db, schema } from "@/lib/db";
@@ -118,7 +119,7 @@ export async function fetchResearchSources(
 }
 
 // The guard runs over prose only; structured fields carry no free-text numbers.
-function narrativeToText(narrative: ResearchNarrative): string {
+function narrativeToText(narrative: ModelResearchNarrative): string {
   const { risks, scenarios, limitations, ...prose } = narrative;
   return [
     ...Object.values(prose),
@@ -126,6 +127,17 @@ function narrativeToText(narrative: ResearchNarrative): string {
     ...scenarios.map((s) => s.summary),
     ...limitations,
   ].join("\n");
+}
+
+// Server-built, not model-generated: the peers paragraph may reference only
+// tickers from `facts.peers` — the same array the peer tiles render from
+// (lib/research/workspace.ts) — so it can never diverge from the peer table.
+function buildPeersNarrative(facts: ResearchFacts): string {
+  const peers = facts.peers ?? [];
+  if (peers.length === 0) {
+    return "No peer set was available from the source provider for this report.";
+  }
+  return `Finnhub lists ${peers.join(", ")} as comparable companies. Their sourced metrics appear in the peer table; peers absent from the table are not discussed.`;
 }
 
 async function generateVerifiedNarrative(
@@ -138,13 +150,14 @@ async function generateVerifiedNarrative(
   model: string;
 }> {
   const basedOn = Object.keys(facts).filter((key) => key !== "ticker");
+  const peers = buildPeersNarrative(facts);
 
   const attempt = async (user: string) => {
     const result = await groqJson(
       {
         system: RESEARCH_SYSTEM_PROMPT,
         user,
-        outputSchema: researchNarrativeSchema,
+        outputSchema: modelNarrativeSchema,
         basedOn,
       },
       { ticker: facts.ticker, ...context },
@@ -158,7 +171,7 @@ async function generateVerifiedNarrative(
   const first = await attempt(buildResearchUserPrompt(facts));
   if (first.guard.ok && first.excessDecimals.length === 0) {
     return {
-      narrative: first.result.data,
+      narrative: { ...first.result.data, peers },
       generated: first.result.meta,
       model: first.result.model,
     };
@@ -185,7 +198,7 @@ async function generateVerifiedNarrative(
   }
 
   return {
-    narrative: second.result.data,
+    narrative: { ...second.result.data, peers },
     generated: second.result.meta,
     model: second.result.model,
   };
@@ -222,8 +235,7 @@ function deterministicResearchFallback(
         "Balance-sheet conclusions are limited to the available sourced liquidity and leverage measures.",
       valuation:
         "The valuation table shows the available market multiples without adding a model-derived target price.",
-      peers:
-        "Peer comparisons are relative snapshots and may be incomplete when a provider omits a company or metric.",
+      peers: buildPeersNarrative(facts),
       recentDevelopments: hasNews
         ? "Recent company-related coverage is listed in the catalyst section and should be verified at the linked source."
         : "No relevant recent company coverage was available from the configured source.",

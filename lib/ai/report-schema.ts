@@ -13,13 +13,16 @@ export const scenarioSchema = z.object({
 
 // Research report (assignment part one): section keys mirror the report
 // section nav in Final-design.md §14.
-export const researchNarrativeSchema = z.object({
+//
+// `peers` is deliberately absent here: it is built server-side from
+// `facts.peers` (lib/research/report.ts) rather than free-generated, so the
+// model is never asked for it and never validated on it.
+export const modelNarrativeSchema = z.object({
   overview: prose,
   businessModel: prose,
   financialPerformance: prose,
   balanceSheet: prose,
   valuation: prose,
-  peers: prose,
   recentDevelopments: prose,
   growthDrivers: prose,
   catalysts: prose,
@@ -27,6 +30,13 @@ export const researchNarrativeSchema = z.object({
   scenarios: z.array(scenarioSchema).length(3),
   thesis: prose,
   limitations: z.array(prose),
+});
+export type ModelResearchNarrative = z.infer<typeof modelNarrativeSchema>;
+
+// The full narrative the UI consumes: the model shape plus the
+// server-composed `peers` field.
+export const researchNarrativeSchema = modelNarrativeSchema.extend({
+  peers: prose,
 });
 export type ResearchNarrative = z.infer<typeof researchNarrativeSchema>;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dailyIdeaNarrativeSchema, researchNarrativeSchema } from "./report-schema";
+import { dailyIdeaNarrativeSchema, modelNarrativeSchema, researchNarrativeSchema } from "./report-schema";
 
 const validResearch = {
   overview: "Designs and sells consumer devices.",
@@ -22,6 +22,11 @@ const validResearch = {
   limitations: ["Based on free-tier data only."],
 };
 
+const validModelResearch = (() => {
+  const { peers, ...rest } = validResearch;
+  return rest;
+})();
+
 describe("researchNarrativeSchema", () => {
   it("accepts a complete narrative", () => {
     expect(researchNarrativeSchema.safeParse(validResearch).success).toBe(true);
@@ -42,6 +47,19 @@ describe("researchNarrativeSchema", () => {
     expect(
       researchNarrativeSchema.safeParse({ ...validResearch, risks: [] }).success,
     ).toBe(false);
+  });
+});
+
+describe("modelNarrativeSchema", () => {
+  it("accepts a narrative with no peers field", () => {
+    expect(modelNarrativeSchema.safeParse(validModelResearch).success).toBe(true);
+  });
+
+  it("ignores a model-supplied peers field rather than carrying it through", () => {
+    const withPeers = { ...validModelResearch, peers: "Model-invented peer text." };
+    const result = modelNarrativeSchema.safeParse(withPeers);
+    expect(result.success).toBe(true);
+    expect(result.success && "peers" in result.data).toBe(false);
   });
 });
 

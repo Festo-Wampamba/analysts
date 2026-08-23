@@ -46,6 +46,7 @@ vi.mock("@/lib/ai/groq", async (importOriginal) => {
 });
 
 import { groqJson } from "@/lib/ai/groq";
+import { modelNarrativeSchema } from "@/lib/ai/report-schema";
 import {
   getCompanyNews,
   getMetrics,
@@ -296,6 +297,61 @@ describe("getResearchReport generation", () => {
     await expect(getResearchReport("AAPL")).rejects.toMatchObject({
       code: "sources_unavailable",
     });
+  });
+});
+
+describe("getResearchReport peers narrative", () => {
+  it("requests generation using the peers-less model schema", async () => {
+    mockAllProvidersOk();
+    vi.mocked(groqJson).mockResolvedValue(mockGeneration(narrative()));
+
+    await getResearchReport("AAPL");
+
+    const callArgs = vi.mocked(groqJson).mock.calls[0][0];
+    expect(callArgs.outputSchema).toBe(modelNarrativeSchema);
+  });
+
+  it("builds narrative.peers from facts.peers tickers and nothing else ticker-like", async () => {
+    vi.mocked(getQuote).mockResolvedValue(sourced(quote, "/quote"));
+    vi.mocked(getProfile).mockResolvedValue(sourced(profile, "/stock/profile2"));
+    vi.mocked(getMetrics).mockResolvedValue(sourced({ metric: { peTTM: 34.7 } }, "/stock/metric"));
+    vi.mocked(getPeers).mockResolvedValue(sourced(["AAPL", "MU", "AMD", "AVGO"], "/stock/peers"));
+    vi.mocked(getCompanyNews).mockResolvedValue(sourced([], "/company-news"));
+    vi.mocked(getRecommendations).mockResolvedValue(sourced([], "/stock/recommendation"));
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ peers: "Model-invented peer claims that should be discarded." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    const tickerLikeTokens = report.narrative.peers.match(/\b[A-Z]{2,5}\b/g) ?? [];
+    expect(new Set(tickerLikeTokens)).toEqual(new Set(["MU", "AMD", "AVGO"]));
+    expect(report.narrative.peers).not.toContain("Model-invented");
+  });
+
+  it("uses empty-peers wording when facts.peers has no entries", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getPeers).mockResolvedValue(sourced(["AAPL"], "/stock/peers"));
+    vi.mocked(groqJson).mockResolvedValue(mockGeneration(narrative()));
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.narrative.peers).toBe(
+      "No peer set was available from the source provider for this report.",
+    );
+  });
+
+  it("gives the deterministic fallback path the same deterministic peers text", async () => {
+    mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ thesis: "Revenue will hit $394.3 billion." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+    expect(report.narrative.peers).toContain("MSFT");
   });
 });
 
