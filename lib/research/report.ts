@@ -22,6 +22,7 @@ import {
   buildNumericAllowlist,
   buildResearchFacts,
   hasMinimumFacts,
+  PEER_TABLE_LIMIT,
   type RawResearchSources,
   type ResearchFacts,
 } from "./facts";
@@ -130,10 +131,11 @@ function narrativeToText(narrative: ModelResearchNarrative): string {
 }
 
 // Server-built, not model-generated: the peers paragraph may reference only
-// tickers from `facts.peers` — the same array the peer tiles render from
-// (lib/research/workspace.ts) — so it can never diverge from the peer table.
+// tickers the peer table (lib/research/workspace.ts) actually renders —
+// `facts.peers` sliced to PEER_TABLE_LIMIT, the same slice the table applies
+// — so it can never name a peer the table doesn't show.
 function buildPeersNarrative(facts: ResearchFacts): string {
-  const peers = facts.peers ?? [];
+  const peers = (facts.peers ?? []).slice(0, PEER_TABLE_LIMIT);
   if (peers.length === 0) {
     return "No peer set was available from the source provider for this report.";
   }

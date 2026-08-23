@@ -329,6 +329,23 @@ describe("getResearchReport peers narrative", () => {
     expect(report.narrative.peers).not.toContain("Model-invented");
   });
 
+  it("names only the peers the table renders when facts.peers exceeds the table limit", async () => {
+    vi.mocked(getQuote).mockResolvedValue(sourced(quote, "/quote"));
+    vi.mocked(getProfile).mockResolvedValue(sourced(profile, "/stock/profile2"));
+    vi.mocked(getMetrics).mockResolvedValue(sourced({ metric: { peTTM: 34.7 } }, "/stock/metric"));
+    vi.mocked(getPeers).mockResolvedValue(
+      sourced(["AAPL", "MU", "AMD", "AVGO", "INTC", "TXN", "QCOM"], "/stock/peers"),
+    );
+    vi.mocked(getCompanyNews).mockResolvedValue(sourced([], "/company-news"));
+    vi.mocked(getRecommendations).mockResolvedValue(sourced([], "/stock/recommendation"));
+    vi.mocked(groqJson).mockResolvedValue(mockGeneration(narrative()));
+
+    const report = await getResearchReport("AAPL");
+
+    const tickerLikeTokens = report.narrative.peers.match(/\b[A-Z]{2,5}\b/g) ?? [];
+    expect(new Set(tickerLikeTokens)).toEqual(new Set(["MU", "AMD", "AVGO", "INTC"]));
+  });
+
   it("uses empty-peers wording when facts.peers has no entries", async () => {
     mockAllProvidersOk();
     vi.mocked(getPeers).mockResolvedValue(sourced(["AAPL"], "/stock/peers"));

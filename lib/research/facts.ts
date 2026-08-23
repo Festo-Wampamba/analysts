@@ -19,6 +19,12 @@ import { formatFactsForPrompt } from "@/lib/domain/prompt-format";
 // Anything absent here cannot legitimately appear in generated prose — the
 // numeric guard enforces exactly that using `numericAllowlist`.
 
+// How many entries of `facts.peers` the peer table (lib/research/workspace.ts)
+// renders, besides the researched ticker itself. The peers narrative
+// (lib/research/report.ts) must use the same limit so it never names a
+// ticker the table doesn't show.
+export const PEER_TABLE_LIMIT = 4;
+
 export type ResearchFacts = {
   ticker: string;
   company?: {

@@ -13,6 +13,7 @@ import {
 import { metricNumber } from "@/lib/source/finnhub-schemas";
 import { getFinancialSnapshot, type FinancialSnapshot } from "@/lib/source/sec";
 import { sortUpcomingEarnings } from "./earnings";
+import { PEER_TABLE_LIMIT } from "./facts";
 import { getResearchReport, type ResearchReport } from "./report";
 
 export type PeerSnapshot = {
@@ -170,7 +171,7 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
       isoDateOffset(180),
       context,
     );
-    const peerTickers = [symbol, ...(report.facts.peers ?? [])].slice(0, 5);
+    const peerTickers = [symbol, ...(report.facts.peers ?? []).slice(0, PEER_TABLE_LIMIT)];
     const [financialResult, chartResult, earningsResult, peerResults] =
       await Promise.all([
         Promise.resolve(financialPromise).then(
