@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-type Preview = {
+import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
+
+export type CandidatePreview = {
   ticker: string;
   companyName?: string;
   currency?: string;
+  marketCapMillions?: number;
   price?: number;
   changePercent?: number;
   asOf?: string;
@@ -17,13 +20,13 @@ type Preview = {
 
 type PreviewState =
   | { status: "loading" }
-  | { status: "ready"; data: Preview }
+  | { status: "ready"; data: CandidatePreview }
   | { status: "error"; message: string };
 
 type ResearchResponse = {
   ticker?: unknown;
   facts?: {
-    company?: { name?: unknown; currency?: unknown };
+    company?: { name?: unknown; currency?: unknown; marketCapMillions?: unknown };
   };
   narrative?: { thesis?: unknown };
   generated?: { generatedAt?: unknown; status?: unknown };
@@ -41,7 +44,7 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function parsePreview(payload: unknown, requestedTicker: string): Preview | null {
+function parsePreview(payload: unknown, requestedTicker: string): CandidatePreview | null {
   if (!payload || typeof payload !== "object") return null;
   const report = payload as ResearchResponse;
   const ticker = asString(report.ticker) ?? requestedTicker;
@@ -52,6 +55,7 @@ function parsePreview(payload: unknown, requestedTicker: string): Preview | null
     ticker,
     companyName: asString(report.facts?.company?.name),
     currency: asString(report.facts?.company?.currency),
+    marketCapMillions: asNumber(report.facts?.company?.marketCapMillions),
     price: asNumber(quote?.price),
     changePercent: asNumber(quote?.changePercent),
     asOf: asString(report.workspace?.chart?.asOf) ?? asString(quote?.quoteAsOf),
@@ -70,22 +74,21 @@ function formatMoney(value: number | undefined, currency = "USD") {
   }).format(value);
 }
 
-function formatAsOf(value: string | undefined) {
-  if (!value) return "Provider time unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(value));
-}
-
-export function CandidateResearchPreview({ ticker }: { ticker: string }) {
-  const cacheRef = useRef(new Map<string, Preview>());
-  const [state, setState] = useState<PreviewState>({ status: "loading" });
+export function CandidateResearchPreview({
+  ticker,
+  initial,
+}: {
+  ticker: string;
+  initial?: CandidatePreview;
+}) {
+  const initialMatches = initial !== undefined && initial.ticker.toUpperCase() === ticker.toUpperCase();
+  const initialEntries: [string, CandidatePreview][] = initialMatches ? [[ticker, initial]] : [];
+  const cacheRef = useRef(new Map<string, CandidatePreview>(initialEntries));
+  const [state, setState] = useState<PreviewState>(
+    initialMatches ? { status: "ready", data: initial } : { status: "loading" },
+  );
+  const timeZone = useViewerTimeZone();
+  const formatAsOf = (value: string | undefined) => formatDateTime(value, timeZone, dateTimeOptions, "Provider time unavailable");
 
   useEffect(() => {
     const cached = cacheRef.current.get(ticker);
@@ -133,13 +136,13 @@ export function CandidateResearchPreview({ ticker }: { ticker: string }) {
   return (
     <section className="candidate-research-preview" aria-live="polite">
       <div className="candidate-research-preview__head">
-        <div><span className="eyebrow eyebrow--fact">Live provider facts · {data.ticker}</span><strong>{data.companyName ?? data.ticker}</strong></div>
+        <div><span className="eyebrow eyebrow--fact">Now viewing research · {data.ticker}</span><strong>{data.companyName ?? data.ticker}</strong><small>Live provider facts and a sourced narrative for this ranked candidate.</small></div>
         <Link className="button" href={`/research/${data.ticker}`}>Open full sourced report</Link>
       </div>
       <div className="candidate-research-preview__facts">
         <div><span>Latest quote</span><strong>{formatMoney(data.price, data.currency)}</strong>{data.changePercent !== undefined && <em className={data.changePercent >= 0 ? "trend-up" : "trend-down"}>{data.changePercent >= 0 ? "▲" : "▼"} {Math.abs(data.changePercent).toFixed(2)}%</em>}</div>
         <div><span>Latest provider bar</span><strong>{formatAsOf(data.asOf)}</strong></div>
-        <div><span>Research narrative</span><strong>{data.generatedStatus === "fallback" ? "Verified fallback" : "AI-generated"}</strong><small>{data.generatedAt ? `Generated ${formatAsOf(data.generatedAt)}` : "Generated time unavailable"}</small></div>
+        <div><span>Research narrative</span><strong>{data.generatedStatus === "fallback" ? "Fallback · sourced data only" : "AI-generated"}</strong><small>{data.generatedAt ? `Generated ${formatAsOf(data.generatedAt)}` : "Generated time unavailable"}</small></div>
       </div>
       {data.thesis && <p className="candidate-research-preview__thesis">{data.thesis}</p>}
     </section>

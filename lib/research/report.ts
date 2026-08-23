@@ -3,7 +3,8 @@ import { and, desc, eq, gt } from "drizzle-orm";
 import { groqJson } from "@/lib/ai/groq";
 import { verifyNumericClaims } from "@/lib/ai/guards";
 import {
-  researchNarrativeSchema,
+  modelNarrativeSchema,
+  type ModelResearchNarrative,
   type ResearchNarrative,
 } from "@/lib/ai/report-schema";
 import { db, schema } from "@/lib/db";
@@ -21,10 +22,20 @@ import {
   buildNumericAllowlist,
   buildResearchFacts,
   hasMinimumFacts,
+  PEER_TABLE_LIMIT,
   type RawResearchSources,
   type ResearchFacts,
 } from "./facts";
 import { buildNumericCorrectionPrompt, buildResearchUserPrompt, RESEARCH_SYSTEM_PROMPT } from "./prompt";
+
+// Defense-in-depth: a number that IS in the sourced facts (so the numeric
+// guard alone allows it) can still reach prose at raw provider precision
+// instead of the rounded, display-grade form the prompt showed the model.
+const EXCESS_DECIMAL_PATTERN = /\d+\.\d{5,}/g;
+
+function findExcessDecimalNumbers(text: string): string[] {
+  return [...text.matchAll(EXCESS_DECIMAL_PATTERN)].map((match) => match[0]);
+}
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const QUOTE_FRESHNESS_MS = 15 * 60 * 1000;
@@ -109,7 +120,7 @@ export async function fetchResearchSources(
 }
 
 // The guard runs over prose only; structured fields carry no free-text numbers.
-function narrativeToText(narrative: ResearchNarrative): string {
+function narrativeToText(narrative: ModelResearchNarrative): string {
   const { risks, scenarios, limitations, ...prose } = narrative;
   return [
     ...Object.values(prose),
@@ -117,6 +128,18 @@ function narrativeToText(narrative: ResearchNarrative): string {
     ...scenarios.map((s) => s.summary),
     ...limitations,
   ].join("\n");
+}
+
+// Server-built, not model-generated: the peers paragraph may reference only
+// tickers the peer table (lib/research/workspace.ts) actually renders —
+// `facts.peers` sliced to PEER_TABLE_LIMIT, the same slice the table applies
+// — so it can never name a peer the table doesn't show.
+function buildPeersNarrative(facts: ResearchFacts): string {
+  const peers = (facts.peers ?? []).slice(0, PEER_TABLE_LIMIT);
+  if (peers.length === 0) {
+    return "No peer set was available from the source provider for this report.";
+  }
+  return `Finnhub lists ${peers.join(", ")} as comparable companies. Their sourced metrics appear in the peer table; peers absent from the table are not discussed.`;
 }
 
 async function generateVerifiedNarrative(
@@ -129,25 +152,28 @@ async function generateVerifiedNarrative(
   model: string;
 }> {
   const basedOn = Object.keys(facts).filter((key) => key !== "ticker");
+  const peers = buildPeersNarrative(facts);
 
   const attempt = async (user: string) => {
     const result = await groqJson(
       {
         system: RESEARCH_SYSTEM_PROMPT,
         user,
-        outputSchema: researchNarrativeSchema,
+        outputSchema: modelNarrativeSchema,
         basedOn,
       },
       { ticker: facts.ticker, ...context },
     );
-    const guard = verifyNumericClaims(narrativeToText(result.data), allowlist);
-    return { result, guard };
+    const text = narrativeToText(result.data);
+    const guard = verifyNumericClaims(text, allowlist);
+    const excessDecimals = findExcessDecimalNumbers(text);
+    return { result, guard, excessDecimals };
   };
 
   const first = await attempt(buildResearchUserPrompt(facts));
-  if (first.guard.ok) {
+  if (first.guard.ok && first.excessDecimals.length === 0) {
     return {
-      narrative: first.result.data,
+      narrative: { ...first.result.data, peers },
       generated: first.result.meta,
       model: first.result.model,
     };
@@ -155,30 +181,51 @@ async function generateVerifiedNarrative(
 
   // One corrective retry naming the rejected figures; models usually comply
   // once the specific offending strings are quoted back at them.
-  const offending = first.guard.violations.map((v) => v.raw);
+  const offending = [
+    ...first.guard.violations.map((v) => v.raw),
+    ...first.excessDecimals,
+  ];
   const second = await attempt(buildNumericCorrectionPrompt(facts, offending));
-  if (!second.guard.ok) {
+  if (!second.guard.ok || second.excessDecimals.length > 0) {
     throw new ReportError(
       "unverifiable_numbers",
       "generated report contained figures absent from the sourced facts",
-      { violations: second.guard.violations.map((v) => v.raw) },
+      {
+        violations: [
+          ...second.guard.violations.map((v) => v.raw),
+          ...second.excessDecimals,
+        ],
+      },
     );
   }
 
   return {
-    narrative: second.result.data,
+    narrative: { ...second.result.data, peers },
     generated: second.result.meta,
     model: second.result.model,
   };
 }
 
-function deterministicResearchFallback(facts: ResearchFacts): {
+// The fallback fires for two unrelated causes — the guard rejected the
+// prose, or the provider call itself failed (network/HTTP error) — and the
+// shown limitation must name the one that actually happened.
+function fallbackReason(error: unknown): string {
+  return error instanceof ReportError && error.code === "unverifiable_numbers"
+    ? "Model output failed factual verification"
+    : "AI narrative generation was unavailable (provider error)";
+}
+
+function deterministicResearchFallback(
+  facts: ResearchFacts,
+  error: unknown,
+): {
   narrative: ResearchNarrative;
   generated: GeneratedContentMeta;
   model: string;
 } {
   const company = facts.company?.name ?? facts.ticker;
   const hasNews = !!facts.news?.length;
+  const reason = fallbackReason(error);
   return {
     narrative: {
       overview: `${company} is presented from the sourced company profile and market-data snapshot available to this report.`,
@@ -190,8 +237,7 @@ function deterministicResearchFallback(facts: ResearchFacts): {
         "Balance-sheet conclusions are limited to the available sourced liquidity and leverage measures.",
       valuation:
         "The valuation table shows the available market multiples without adding a model-derived target price.",
-      peers:
-        "Peer comparisons are relative snapshots and may be incomplete when a provider omits a company or metric.",
+      peers: buildPeersNarrative(facts),
       recentDevelopments: hasNews
         ? "Recent company-related coverage is listed in the catalyst section and should be verified at the linked source."
         : "No relevant recent company coverage was available from the configured source.",
@@ -211,13 +257,13 @@ function deterministicResearchFallback(facts: ResearchFacts): {
       ],
       thesis:
         "The investment case should be based on the sourced operating evidence, valuation context, and identified risks rather than generated forecasts.",
-      limitations: ["Model output failed factual verification, so deterministic explanatory text is shown."],
+      limitations: [`${reason}, so deterministic explanatory text is shown.`],
     },
     generated: {
       generatedAt: new Date().toISOString(),
       basedOn: Object.keys(facts).filter((key) => key !== "ticker"),
       modelLabel: "deterministic-safety-fallback",
-      limitations: ["Model output failed factual verification."],
+      limitations: [`${reason}.`],
       status: "fallback",
     },
     model: "deterministic-safety-fallback",
@@ -312,7 +358,7 @@ export async function getResearchReport(
     generatedReport = await generateVerifiedNarrative(facts, allowlist, context);
   } catch (error) {
     console.error("research generation verification failed; using fallback:", error);
-    generatedReport = deterministicResearchFallback(facts);
+    generatedReport = deterministicResearchFallback(facts, error);
   }
   const { narrative, generated, model } = generatedReport;
 

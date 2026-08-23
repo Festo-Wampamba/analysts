@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // TypeScript 5.9 has a JavaScript compiler API. Using it avoids Next 16's
+  // direct CLI invocation, which executes the package wrapper as a Node entry
+  // and returns no `--showConfig` output in this pnpm environment.
+  experimental: {
+    useTypeScriptCli: false,
+  },
   async headers() {
     return [
       {

@@ -8,7 +8,27 @@ const BASE_URL = "https://api.groq.com/openai/v1";
 const ENDPOINT = "/chat/completions";
 const TIMEOUT_MS = 60_000;
 const PROVIDER = "groq";
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+// Groq retires Llama 3.3 70B on 2026-08-16. GPT-OSS 120B supports the JSON
+// mode this client relies on and is Groq's documented replacement.
+export const DEFAULT_MODEL = "openai/gpt-oss-120b";
+const RETIRED_MODEL_REPLACEMENTS: Record<string, string> = {
+  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+  "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+};
+
+export function resolveGroqModel(configuredModel = process.env.GROQ_MODEL): string {
+  const model = configuredModel?.trim();
+  if (!model) return DEFAULT_MODEL;
+
+  const replacement = RETIRED_MODEL_REPLACEMENTS[model];
+  if (!replacement) return model;
+
+  // Keep existing deployments working even when their environment still has
+  // the retired name. The warning is deliberately free of secrets and gives
+  // operators a clear, non-blocking migration signal.
+  console.warn(`GROQ_MODEL=${model} is retired; using ${replacement} instead.`);
+  return replacement;
+}
 
 export class GroqError extends Error {
   readonly httpStatus?: number;
@@ -68,7 +88,7 @@ export async function groqJson<S extends z.ZodType>(
 ): Promise<Generated<z.output<S>>> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new GroqError("GROQ_API_KEY is not set");
-  const model = process.env.GROQ_MODEL ?? DEFAULT_MODEL;
+  const model = resolveGroqModel();
 
   const fetchedAt = new Date();
   const started = performance.now();

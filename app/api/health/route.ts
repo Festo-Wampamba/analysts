@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
+import { isTradingDateStale } from "@/lib/screen/trading-date";
 
 // ponytail: single-connection pool just for liveness; phase 2 adds the app pool
 const pool = new Pool({
@@ -58,10 +59,7 @@ export async function GET() {
       persistence.provider_cache &&
       persistence.source_calls_research_run_link,
     );
-    const screenStale = latest
-      ? Date.now() - new Date(`${latest.trading_date}T23:59:59Z`).getTime() >
-        3 * 86_400_000
-      : true;
+    const screenStale = latest ? isTradingDateStale(latest.trading_date) : true;
     return NextResponse.json({
       status:
         screenStale || latest?.status === "failed" || !researchPersistenceReady

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dailyIdeaNarrativeSchema, researchNarrativeSchema } from "./report-schema";
+import { dailyIdeaNarrativeSchema, modelNarrativeSchema, researchNarrativeSchema } from "./report-schema";
 
 const validResearch = {
   overview: "Designs and sells consumer devices.",
@@ -18,9 +18,14 @@ const validResearch = {
     { label: "base", summary: "Steady growth continues." },
     { label: "bear", summary: "Hardware demand softens." },
   ],
-  thesis: "Quality compounder at a full price.",
+  thesis:
+    "The stance is constructive: the services attach broadens margins while hardware holds share. The earnings release and product event named above are the near-term proof points, and regulatory pressure on the app store is the risk that most constrains the upside. The factor most likely to change the stance is a regulatory ruling that caps services take rates.",
   limitations: ["Based on free-tier data only."],
 };
+
+const validModelResearch = Object.fromEntries(
+  Object.entries(validResearch).filter(([key]) => key !== "peers"),
+);
 
 describe("researchNarrativeSchema", () => {
   it("accepts a complete narrative", () => {
@@ -42,6 +47,28 @@ describe("researchNarrativeSchema", () => {
     expect(
       researchNarrativeSchema.safeParse({ ...validResearch, risks: [] }).success,
     ).toBe(false);
+  });
+
+  it("rejects a one-line generic thesis", () => {
+    expect(
+      modelNarrativeSchema.safeParse({
+        ...validModelResearch,
+        thesis: "Quality compounder at a full price.",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("modelNarrativeSchema", () => {
+  it("accepts a narrative with no peers field", () => {
+    expect(modelNarrativeSchema.safeParse(validModelResearch).success).toBe(true);
+  });
+
+  it("ignores a model-supplied peers field rather than carrying it through", () => {
+    const withPeers = { ...validModelResearch, peers: "Model-invented peer text." };
+    const result = modelNarrativeSchema.safeParse(withPeers);
+    expect(result.success).toBe(true);
+    expect(result.success && "peers" in result.data).toBe(false);
   });
 });
 

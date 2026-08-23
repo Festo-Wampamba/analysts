@@ -12,6 +12,8 @@ import {
 } from "@/lib/source/finnhub-cached";
 import { metricNumber } from "@/lib/source/finnhub-schemas";
 import { getFinancialSnapshot, type FinancialSnapshot } from "@/lib/source/sec";
+import { sortUpcomingEarnings } from "./earnings";
+import { PEER_TABLE_LIMIT } from "./facts";
 import { getResearchReport, type ResearchReport } from "./report";
 
 export type PeerSnapshot = {
@@ -169,7 +171,7 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
       isoDateOffset(180),
       context,
     );
-    const peerTickers = [symbol, ...(report.facts.peers ?? [])].slice(0, 5);
+    const peerTickers = [symbol, ...(report.facts.peers ?? []).slice(0, PEER_TABLE_LIMIT)];
     const [financialResult, chartResult, earningsResult, peerResults] =
       await Promise.all([
         Promise.resolve(financialPromise).then(
@@ -196,7 +198,7 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
     else failedSections.push({ section: "chart", reason: errorMessage(chartResult.reason) });
 
     const earnings = earningsResult.status === "fulfilled"
-      ? earningsResult.value.data.earningsCalendar
+      ? sortUpcomingEarnings(earningsResult.value.data.earningsCalendar
           .filter((event) => event.symbol.toUpperCase() === symbol)
           .map(({ date, hour, quarter, year, epsEstimate, revenueEstimate }) => ({
             date,
@@ -205,7 +207,7 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
             year,
             epsEstimate,
             revenueEstimate,
-          }))
+          })))
       : [];
     if (earningsResult.status === "fulfilled") provenance.push(earningsResult.value.provenance);
     else failedSections.push({ section: "catalysts", reason: errorMessage(earningsResult.reason) });
@@ -236,16 +238,35 @@ async function buildResearchWorkspace(ticker: string): Promise<ResearchWorkspace
 }
 
 const activeWorkspaceBuilds = new Map<string, Promise<ResearchWorkspace>>();
+const completedWorkspaceBuilds = new Map<
+  string,
+  { value: ResearchWorkspace; expiresAt: number }
+>();
+const WORKSPACE_CACHE_TTL_MS = 60_000;
 
 export function getResearchWorkspace(ticker: string): Promise<ResearchWorkspace> {
   const symbol = ticker.toUpperCase();
+  const completed = completedWorkspaceBuilds.get(symbol);
+  if (completed && completed.expiresAt > Date.now()) {
+    return Promise.resolve(completed.value);
+  }
+  if (completed) completedWorkspaceBuilds.delete(symbol);
+
   const active = activeWorkspaceBuilds.get(symbol);
   if (active) return active;
-  const build = buildResearchWorkspace(symbol).finally(() => {
-    if (activeWorkspaceBuilds.get(symbol) === build) {
-      activeWorkspaceBuilds.delete(symbol);
-    }
-  });
+  const build = buildResearchWorkspace(symbol)
+    .then((value) => {
+      completedWorkspaceBuilds.set(symbol, {
+        value,
+        expiresAt: Date.now() + WORKSPACE_CACHE_TTL_MS,
+      });
+      return value;
+    })
+    .finally(() => {
+      if (activeWorkspaceBuilds.get(symbol) === build) {
+        activeWorkspaceBuilds.delete(symbol);
+      }
+    });
   activeWorkspaceBuilds.set(symbol, build);
   return build;
 }

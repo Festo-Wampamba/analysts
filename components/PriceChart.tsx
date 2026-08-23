@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { marketFreshness } from "@/lib/market/freshness";
+import { dateTimeOptions, formatDateTime, useViewerTimeZone } from "@/components/LocalizedDateTime";
 import type { ChartPoint, ChartRange, ChartSeries } from "@/lib/source/chart";
 
 type ChartState = ChartSeries | { error: string };
 
 const chartRanges: ChartRange[] = ["1d", "5d", "1m", "1y"];
-const EASTERN_TIME_ZONE = "America/New_York";
 const ONE_DAY_REFRESH_MS = 5 * 60 * 1000;
 
 function chartGeometry(points: ChartPoint[]) {
@@ -55,43 +54,13 @@ function formatPrice(value: number, currency: string): string {
   }).format(value);
 }
 
-function formatAsOf(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Provider time unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: EASTERN_TIME_ZONE,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function formatTooltipTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Provider time unavailable";
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: EASTERN_TIME_ZONE,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function axisLabels(series: ChartSeries): { value: string; x: number; anchor: "start" | "middle" | "end" }[] {
+function axisLabels(series: ChartSeries, timeZone: string): { value: string; x: number; anchor: "start" | "middle" | "end" }[] {
   const points = series.points;
   const indexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
   return indexes.map((index, labelIndex) => {
     const date = new Date(points[index].timestamp);
     const value = new Intl.DateTimeFormat("en-US", {
-      timeZone: EASTERN_TIME_ZONE,
+      timeZone,
       month: series.range === "1y" ? "short" : "short",
       day: series.range === "1y" ? undefined : "numeric",
       year: series.range === "1y" ? "2-digit" : undefined,
@@ -122,6 +91,7 @@ export function PriceChart({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const timeZone = useViewerTimeZone();
   const series = "points" in state ? state : null;
   const geometry = series ? chartGeometry(series.points) : null;
   const activePoint = hoveredIndex === null || !series ? null : series.points[hoveredIndex];
@@ -131,7 +101,8 @@ export function PriceChart({
   const change = latest && opening && opening.close !== 0
     ? ((latest.close - opening.close) / opening.close) * 100
     : null;
-  const freshness = latest ? marketFreshness(series!.asOf) : null;
+  const formatAsOf = (value: string) => formatDateTime(value, timeZone, dateTimeOptions, "Provider time unavailable");
+  const formatTooltipTime = formatAsOf;
 
   const loadRange = useCallback(async (next: ChartRange, options: { force?: boolean } = {}) => {
     if (!options.force && next === range && series) return;
@@ -177,16 +148,16 @@ export function PriceChart({
     <section className={`market-chart ${geometry?.rising === false ? "market-chart--down" : ""}`} aria-label={`${ticker} price chart`}>
       <div className="market-chart__header">
         <div>
-          <span className="market-chart__label">Price · {ticker}</span>
+          <span className="market-chart__label">Chart bar · {ticker}</span>
           {latest && (
             <div className="market-chart__summary">
               <strong>{formatPrice(latest.close, currency)}</strong>
               {change !== null && <span className={change >= 0 ? "trend-up" : "trend-down"}>{change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}%</span>}
             </div>
           )}
+          {latest && <small className="market-chart__change-context">{range.toUpperCase()} change versus the first displayed chart bar</small>}
         </div>
         <div className="market-chart__controls">
-          {freshness && <span className={`market-chart__freshness${freshness.stale ? " is-stale" : ""}`}>{freshness.label}</span>}
           <div className="market-chart__range" aria-label="Chart range">
             {chartRanges.map((option) => (
               <button
@@ -234,8 +205,8 @@ export function PriceChart({
                 <text className="chart-tooltip__date" x="8" y="29">{formatTooltipTime(activePoint.timestamp)}</text>
               </g>
             </g>
-          ) : <circle className="chart-point" cx={geometry.last.x} cy={geometry.last.y} r="4" />}
-          {axisLabels(series).map((label) => <text className="chart-axis-label" key={`${label.x}-${label.value}`} x={label.x} y="142" textAnchor={label.anchor}>{label.value}</text>)}
+          ) : null}
+          {axisLabels(series, timeZone).map((label) => <text className="chart-axis-label" key={`${label.x}-${label.value}`} x={label.x} y="142" textAnchor={label.anchor}>{label.value}</text>)}
         </svg>
       ) : (
         <div className="chart-unavailable" role="status">

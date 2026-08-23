@@ -2,79 +2,80 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { marketFreshness } from "@/lib/market/freshness";
+const HEALTH_REFRESH_MS = 5 * 60 * 1000;
 
-const CHART_REFRESH_MS = 5 * 60 * 1000;
-const CLOCK_REFRESH_MS = 60 * 1000;
+type HealthPayload = {
+  status?: unknown;
+  db?: unknown;
+  providers?: Record<string, unknown>;
+  latestScreen?: { tradingDate?: unknown } | null;
+};
 
-type ChartPayload = { asOf?: unknown };
+type HealthView = { label: string; degraded: boolean; title: string };
 
 function StatusIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 1-4.3-7.1" /><path d="m9 11 2 2 5-6" /></svg>;
 }
 
-function validAsOf(payload: unknown): string | null {
+export function parseHealthView(payload: unknown): HealthView | null {
   if (!payload || typeof payload !== "object") return null;
-  const asOf = (payload as ChartPayload).asOf;
-  return typeof asOf === "string" && Number.isFinite(new Date(asOf).getTime())
-    ? asOf
+  const health = payload as HealthPayload;
+  const providers = health.providers;
+  const requiredProvidersReady = providers
+    ? providers.finnhub === true && providers.groq === true
+    : false;
+  const degraded = health.status !== "ok" || health.db !== "reachable" || !requiredProvidersReady;
+  const tradingDate = health.latestScreen && typeof health.latestScreen.tradingDate === "string"
+    ? health.latestScreen.tradingDate
     : null;
+  return degraded
+    ? {
+        label: "Provider degraded",
+        degraded: true,
+        title: tradingDate ? `Platform health degraded · latest screen ${tradingDate}` : "Platform health degraded",
+      }
+    : {
+        label: tradingDate ? `Operational · data ${tradingDate}` : "Operational · data date unavailable",
+        degraded: false,
+        title: tradingDate ? `Platform operational · latest screen ${tradingDate}` : "Platform operational",
+      };
 }
 
-export function LiveMarketStatus({
-  ticker,
-  initialAsOf,
-  unavailableLabel = "Market data unavailable",
-}: {
-  ticker?: string | null;
-  initialAsOf?: string | null;
-  unavailableLabel?: string;
-}) {
-  const [asOf, setAsOf] = useState<string | null>(initialAsOf ?? null);
-  const [, setNow] = useState(() => Date.now());
+export function LiveMarketStatus() {
+  const [health, setHealth] = useState<HealthView | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!ticker) return;
     try {
-      const response = await fetch(
-        `/api/research/${encodeURIComponent(ticker)}/chart?range=1d`,
-        { cache: "no-store" },
-      );
-      const nextAsOf = response.ok ? validAsOf(await response.json()) : null;
-      // A short provider or network failure must never replace the latest
-      // valid timestamp with an unhelpful error chip.
-      if (nextAsOf) setAsOf(nextAsOf);
+      const response = await fetch("/api/health", { cache: "no-store" });
+      const nextHealth = response.ok ? parseHealthView(await response.json()) : null;
+      // A short health-poll failure must never replace the last known
+      // platform state with an alarming single-request error.
+      if (nextHealth) setHealth(nextHealth);
     } catch {
-      // Retain the last valid provider bar and try again on the next cadence.
+      // Retain the last known platform state and try again on the next cadence.
     }
-  }, [ticker]);
+  }, []);
 
   useEffect(() => {
     // Schedule the initial provider request after mount; this avoids a
     // synchronous state transition during effect setup and keeps the status
     // chip responsive to the first completed network response.
     const initialRefreshTimer = window.setTimeout(() => void refresh(), 0);
-    const refreshTimer = window.setInterval(() => void refresh(), CHART_REFRESH_MS);
+    const refreshTimer = window.setInterval(() => void refresh(), HEALTH_REFRESH_MS);
     return () => {
       window.clearTimeout(initialRefreshTimer);
       window.clearInterval(refreshTimer);
     };
   }, [refresh]);
 
-  useEffect(() => {
-    const clockTimer = window.setInterval(() => setNow(Date.now()), CLOCK_REFRESH_MS);
-    return () => window.clearInterval(clockTimer);
-  }, []);
-
-  const freshness = asOf ? marketFreshness(asOf) : null;
   return (
     <span
-      className={`status-chip${freshness?.stale ? " status-chip--stale" : ""}`}
+      className={`status-chip${health?.degraded ? " status-chip--degraded" : ""}`}
       aria-live="polite"
-      title={asOf ?? unavailableLabel}
+      title={health?.title ?? "Checking platform health"}
     >
       <StatusIcon />
-      {freshness?.label ?? unavailableLabel}
+      {health?.label ?? "Checking platform health"}
     </span>
   );
 }

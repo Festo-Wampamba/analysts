@@ -74,6 +74,21 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   minCoverage: 0.6,
 };
 
+/** Reconstruct stored candidate coverage from the same factor weights used by
+ * the deterministic scorer. This keeps historical rows explainable without
+ * requiring a schema change just to display the persisted queue. */
+export function coverageForSubScores(
+  subScores: Partial<Record<FactorName, number | null>>,
+  config: ScoringConfig = DEFAULT_SCORING_CONFIG,
+): number {
+  const totalWeight = Object.values(config.weights).reduce((sum, weight) => sum + weight, 0);
+  const availableWeight = (Object.keys(config.weights) as FactorName[]).reduce(
+    (sum, factor) => sum + (typeof subScores[factor] === "number" ? config.weights[factor] : 0),
+    0,
+  );
+  return totalWeight > 0 ? round4(availableWeight / totalWeight) : 0;
+}
+
 type Component = {
   extract: (m: CandidateMetrics) => number | undefined;
   lowerIsBetter?: boolean;

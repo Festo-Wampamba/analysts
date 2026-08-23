@@ -3,10 +3,16 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { CandidateResearchPreview } from "@/components/CandidateResearchPreview";
+import { FactorScoreChip, leadingFactor } from "@/components/FactorScoreChip";
+import {
+  CandidateResearchPreview,
+  type CandidatePreview,
+} from "@/components/CandidateResearchPreview";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
 
 type Candidate = LatestIdea["candidates"][number];
+
+const ROTATION_SECONDS = 5;
 
 function initialIndex(candidates: Candidate[], ticker?: string | null): number {
   const matching = ticker
@@ -15,28 +21,24 @@ function initialIndex(candidates: Candidate[], ticker?: string | null): number {
   return matching >= 0 ? matching : 0;
 }
 
-function formatSeconds(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-}
-
 export function CandidateCarousel({
   candidates: initialCandidates,
   initialTicker,
+  initialPreview,
 }: {
   candidates: Candidate[];
   initialTicker?: string | null;
+  initialPreview?: CandidatePreview;
 }) {
   const [candidates, setCandidates] = useState(initialCandidates);
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
   const [paused, setPaused] = useState(false);
-  const [secondsRemaining, setSecondsRemaining] = useState(60);
-  const [researchTicker, setResearchTicker] = useState<string | null>(initialTicker ?? initialCandidates[0]?.ticker ?? null);
+  const [secondsRemaining, setSecondsRemaining] = useState(ROTATION_SECONDS);
   const trackRef = useRef<HTMLDivElement>(null);
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
   const canRotate = candidates.length > 1;
+  const rotationProgress = `${Math.round(((ROTATION_SECONDS - secondsRemaining) / ROTATION_SECONDS) * 100)}%`;
 
   useEffect(() => {
     selectedTickerRef.current = selected?.ticker;
@@ -48,7 +50,7 @@ export function CandidateCarousel({
       setSecondsRemaining((remaining) => {
         if (remaining > 1) return remaining - 1;
         setSelectedIndex((current) => (current + 1) % candidates.length);
-        return 60;
+        return ROTATION_SECONDS;
       });
     }, 1_000);
     return () => window.clearInterval(timer);
@@ -86,30 +88,35 @@ export function CandidateCarousel({
   }, []);
 
   useEffect(() => {
-    trackRef.current
-      ?.querySelector<HTMLElement>(`[data-candidate-index="${selectedIndex}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    const track = trackRef.current;
+    const candidate = track?.querySelector<HTMLElement>(`[data-candidate-index="${selectedIndex}"]`);
+    if (!track || !candidate) return;
+
+    // `scrollIntoView` can also move the document vertically. Restricting this
+    // update to the horizontal candidate strip keeps reading position stable.
+    const left = Math.max(0, candidate.offsetLeft - track.offsetLeft - (track.clientWidth - candidate.clientWidth) / 2);
+    track.scrollTo({ left, behavior: "smooth" });
   }, [selectedIndex]);
 
   if (!selected) return null;
 
-  function choose(index: number, loadResearch = true) {
+  function choose(index: number) {
     const nextIndex = (index + candidates.length) % candidates.length;
     setSelectedIndex(nextIndex);
-    if (loadResearch) setResearchTicker(candidates[nextIndex]?.ticker ?? null);
-    setSecondsRemaining(60);
+    setSecondsRemaining(ROTATION_SECONDS);
   }
 
   return (
     <section className="candidate-carousel" aria-label="Screened candidate queue">
       <div className="candidate-carousel__head">
-        <div>
-          <span>Research queue</span>
+        <div className="candidate-carousel__queue-meta">
+          <span>Ranked research queue ({candidates.length})</span>
+          <i aria-hidden="true"><b style={{ width: rotationProgress }} /></i>
           <p aria-live="polite">
             {canRotate
               ? paused
                 ? "Rotation paused"
-                : `Auto advance in ${formatSeconds(secondsRemaining)}`
+                : `Auto advance every ${ROTATION_SECONDS} seconds`
               : "One ranked candidate"}
           </p>
         </div>
@@ -120,7 +127,8 @@ export function CandidateCarousel({
             disabled={!canRotate}
             aria-label="Show previous candidate"
           >
-            Previous
+            <span aria-hidden="true">‹</span>
+            <span className="sr-only">Previous</span>
           </button>
           <button
             type="button"
@@ -128,7 +136,7 @@ export function CandidateCarousel({
             disabled={!canRotate}
             aria-pressed={paused}
           >
-            {paused ? "Resume" : "Pause"}
+            {paused ? "Resume rotation" : "Pause rotation"}
           </button>
           <button
             type="button"
@@ -136,7 +144,8 @@ export function CandidateCarousel({
             disabled={!canRotate}
             aria-label="Show next candidate"
           >
-            Next
+            <span aria-hidden="true">›</span>
+            <span className="sr-only">Next</span>
           </button>
         </div>
       </div>
@@ -144,36 +153,39 @@ export function CandidateCarousel({
         {candidates.map((candidate, index) => (
           <button
             type="button"
-            className={index === selectedIndex ? "is-selected" : ""}
+            className={[index === selectedIndex ? "is-selected" : "", candidate.ticker === initialTicker ? "is-winner" : ""].filter(Boolean).join(" ")}
             aria-pressed={index === selectedIndex}
             aria-label={`Show ${candidate.ticker}, ranked ${candidate.rank}`}
             data-candidate-index={index}
             key={candidate.ticker}
             onClick={() => choose(index)}
           >
-            <span>#{String(candidate.rank).padStart(2, "0")}</span>
-            <strong>{candidate.ticker}</strong>
+            <div>
+              <strong>{candidate.ticker}</strong>
+              <b>{candidate.compositeScore.toFixed(2)}</b>
+            </div>
+            {candidate.ticker === initialTicker && <small className="candidate-winner-tag">Today&apos;s idea</small>}
             <em>{candidate.sector ?? "Sector unavailable"}</em>
-            <b>{candidate.compositeScore.toFixed(2)}</b>
+            {(() => {
+              const factor = leadingFactor(candidate.subScores);
+              return factor ? <FactorScoreChip label={factor.label} score={factor.score} /> : null;
+            })()}
+            <span>Rank {candidate.rank}</span>
+            {candidate.coverage !== undefined && <span>{(candidate.coverage * 100).toFixed(0)}% coverage confidence</span>}
           </button>
         ))}
       </div>
       <div className="candidate-carousel__selection" aria-live="polite">
         <div>
-          <span>Selected candidate</span>
+          <span>Now viewing</span>
           <strong>{selected.ticker}</strong>
           <p>{selected.catalyst ?? "Factor detail will be available in the sourced report."}</p>
         </div>
         <Link className="button" href={`/research/${selected.ticker}`}>
-          Open {selected.ticker} research
+          Open full sourced report
         </Link>
       </div>
-      {researchTicker && researchTicker !== selected.ticker && (
-        <p className="candidate-carousel__auto-note" role="status">
-          Auto rotation highlighted {selected.ticker}. Select it to load its sourced research; the preview below remains {researchTicker}.
-        </p>
-      )}
-      {researchTicker && <CandidateResearchPreview ticker={researchTicker} />}
+      <CandidateResearchPreview ticker={selected.ticker} initial={initialPreview} />
     </section>
   );
 }

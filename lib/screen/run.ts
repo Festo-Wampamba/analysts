@@ -24,6 +24,7 @@ import {
 } from "./prompt";
 import {
   DEFAULT_SCORING_CONFIG,
+  coverageForSubScores,
   scoreCandidates,
   type CandidateInput,
   type ScoredCandidate,
@@ -34,7 +35,10 @@ import type { DailyIdeaFacts, DailyIdeaPayload, ScreenRunResult } from "./types"
 
 // Persist a broad enough ordered queue for users to investigate alternatives,
 // while retaining the first qualifying candidate as the one daily idea.
-export const TOP_CANDIDATES = 15;
+// Keep the top twenty ranked candidates from every completed screen. This is
+// intentionally wider than the single daily pick so readers can compare and
+// open sourced research for the rest of the highest-quality opportunities.
+export const TOP_CANDIDATES = 20;
 const NEWS_LOOKBACK_DAYS = 14;
 
 export class ScreenError extends Error {
@@ -386,7 +390,7 @@ async function readExistingRun(
         catalyst: c.catalyst ?? undefined,
         subScores: c.subScores as ScoredCandidate["subScores"],
         compositeScore: Number(c.compositeScore),
-        coverage: 0,
+        coverage: coverageForSubScores(c.subScores as ScoredCandidate["subScores"]),
         qualified: false,
       })),
     idea: (idea?.narrative as DailyIdeaPayload | undefined) ?? null,

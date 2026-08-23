@@ -46,6 +46,7 @@ vi.mock("@/lib/ai/groq", async (importOriginal) => {
 });
 
 import { groqJson } from "@/lib/ai/groq";
+import { modelNarrativeSchema } from "@/lib/ai/report-schema";
 import {
   getCompanyNews,
   getMetrics,
@@ -299,6 +300,78 @@ describe("getResearchReport generation", () => {
   });
 });
 
+describe("getResearchReport peers narrative", () => {
+  it("requests generation using the peers-less model schema", async () => {
+    mockAllProvidersOk();
+    vi.mocked(groqJson).mockResolvedValue(mockGeneration(narrative()));
+
+    await getResearchReport("AAPL");
+
+    const callArgs = vi.mocked(groqJson).mock.calls[0][0];
+    expect(callArgs.outputSchema).toBe(modelNarrativeSchema);
+  });
+
+  it("builds narrative.peers from facts.peers tickers and nothing else ticker-like", async () => {
+    vi.mocked(getQuote).mockResolvedValue(sourced(quote, "/quote"));
+    vi.mocked(getProfile).mockResolvedValue(sourced(profile, "/stock/profile2"));
+    vi.mocked(getMetrics).mockResolvedValue(sourced({ metric: { peTTM: 34.7 } }, "/stock/metric"));
+    vi.mocked(getPeers).mockResolvedValue(sourced(["AAPL", "MU", "AMD", "AVGO"], "/stock/peers"));
+    vi.mocked(getCompanyNews).mockResolvedValue(sourced([], "/company-news"));
+    vi.mocked(getRecommendations).mockResolvedValue(sourced([], "/stock/recommendation"));
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ peers: "Model-invented peer claims that should be discarded." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    const tickerLikeTokens = report.narrative.peers.match(/\b[A-Z]{2,5}\b/g) ?? [];
+    expect(new Set(tickerLikeTokens)).toEqual(new Set(["MU", "AMD", "AVGO"]));
+    expect(report.narrative.peers).not.toContain("Model-invented");
+  });
+
+  it("names only the peers the table renders when facts.peers exceeds the table limit", async () => {
+    vi.mocked(getQuote).mockResolvedValue(sourced(quote, "/quote"));
+    vi.mocked(getProfile).mockResolvedValue(sourced(profile, "/stock/profile2"));
+    vi.mocked(getMetrics).mockResolvedValue(sourced({ metric: { peTTM: 34.7 } }, "/stock/metric"));
+    vi.mocked(getPeers).mockResolvedValue(
+      sourced(["AAPL", "MU", "AMD", "AVGO", "INTC", "TXN", "QCOM"], "/stock/peers"),
+    );
+    vi.mocked(getCompanyNews).mockResolvedValue(sourced([], "/company-news"));
+    vi.mocked(getRecommendations).mockResolvedValue(sourced([], "/stock/recommendation"));
+    vi.mocked(groqJson).mockResolvedValue(mockGeneration(narrative()));
+
+    const report = await getResearchReport("AAPL");
+
+    const tickerLikeTokens = report.narrative.peers.match(/\b[A-Z]{2,5}\b/g) ?? [];
+    expect(new Set(tickerLikeTokens)).toEqual(new Set(["MU", "AMD", "AVGO", "INTC"]));
+  });
+
+  it("uses empty-peers wording when facts.peers has no entries", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getPeers).mockResolvedValue(sourced(["AAPL"], "/stock/peers"));
+    vi.mocked(groqJson).mockResolvedValue(mockGeneration(narrative()));
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.narrative.peers).toBe(
+      "No peer set was available from the source provider for this report.",
+    );
+  });
+
+  it("gives the deterministic fallback path the same deterministic peers text", async () => {
+    mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ thesis: "Revenue will hit $394.3 billion." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+    expect(report.narrative.peers).toContain("MSFT");
+  });
+});
+
 describe("getResearchReport numeric guard", () => {
   it("retries once when the first draft invents a figure", async () => {
     mockAllProvidersOk();
@@ -364,5 +437,63 @@ describe("getResearchReport numeric guard", () => {
 
     expect(insertedReports).toHaveLength(1);
     expect(insertedReports[0].model).toBe("deterministic-safety-fallback");
+  });
+
+  it("records the factual-verification reason in the fallback limitations", async () => {
+    mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ thesis: "Revenue will hit $394.3 billion." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.narrative.limitations[0]).toContain("factual verification");
+  });
+
+  // A raw float that IS in the sourced facts (so the numeric guard alone
+  // would allow it) still must not reach prose undisplayed — the
+  // post-generation decimal check is the defense-in-depth layer for that.
+  it("retries once when the first draft echoes an in-facts number at raw precision", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getQuote).mockResolvedValue(
+      sourced({ ...quote, dp: 4.569999999999999 }, "/quote"),
+    );
+    vi.mocked(groqJson)
+      .mockResolvedValueOnce(
+        mockGeneration(narrative({ thesis: "Shares rose 4.569999999999999%." })),
+      )
+      .mockResolvedValueOnce(mockGeneration(narrative()));
+
+    await getResearchReport("AAPL");
+
+    expect(groqJson).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back when the retry still echoes an in-facts number at raw precision", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getQuote).mockResolvedValue(
+      sourced({ ...quote, dp: 4.569999999999999 }, "/quote"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ thesis: "Shares rose 4.569999999999999%." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+  });
+
+  it("records the provider-error reason when generation throws a non-guard error", async () => {
+    mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockRejectedValue(new Error("groq request timed out"));
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+    expect(report.narrative.limitations[0]).toContain("provider error");
+    expect(report.narrative.limitations[0]).not.toContain("factual verification");
   });
 });

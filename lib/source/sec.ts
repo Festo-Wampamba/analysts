@@ -94,23 +94,52 @@ const TAGS = {
   debtNoncurrent: ["LongTermDebtNoncurrent", "LongTermDebtAndFinanceLeaseObligationsNoncurrent"],
 } as const;
 
-function annualEntries(facts: CompanyFacts, tags: readonly string[], unit: string): FactEntry[] {
-  for (const tag of tags) {
-    const entries = facts.facts["us-gaap"][tag]?.units[unit];
-    if (!entries) continue;
-    const annual = entries
-      .filter((entry) => entry.form === "10-K" && entry.fp === "FY")
-      .sort((a, b) => b.end.localeCompare(a.end) || b.filed.localeCompare(a.filed));
-    if (annual.length) return annual;
+function annualEntries(
+  facts: CompanyFacts,
+  tags: readonly string[],
+  unit: string,
+  periodEnd?: string,
+): FactEntry[] {
+  const candidates = tags
+    .map((tag, priority) => {
+      const entries = facts.facts["us-gaap"][tag]?.units[unit] ?? [];
+      return {
+        priority,
+        annual: entries
+          .filter((entry) => entry.form === "10-K" && entry.fp === "FY")
+          .sort((a, b) => b.end.localeCompare(a.end) || b.filed.localeCompare(a.filed)),
+      };
+    })
+    .filter((candidate) => candidate.annual.length > 0);
+  if (!candidates.length) return [];
+
+  if (periodEnd) {
+    const matching = candidates
+      .map((candidate) => ({
+        ...candidate,
+        current: candidate.annual.find((entry) => entry.end === periodEnd),
+      }))
+      .filter((candidate): candidate is typeof candidate & { current: FactEntry } => candidate.current !== undefined)
+      .sort((a, b) => b.current.filed.localeCompare(a.current.filed) || a.priority - b.priority);
+    return matching[0]?.annual ?? [];
   }
-  return [];
+
+  return candidates
+    .sort((a, b) => b.annual[0].end.localeCompare(a.annual[0].end) || a.priority - b.priority)[0]
+    .annual;
 }
 
-function toFinancialValue(entries: FactEntry[], unit: string): FinancialValue | undefined {
-  const latest = entries[0];
+function toFinancialValue(
+  entries: FactEntry[],
+  unit: string,
+  periodEnd?: string,
+): FinancialValue | undefined {
+  const latest = periodEnd
+    ? entries.find((entry) => entry.end === periodEnd)
+    : entries[0];
   if (!latest) return undefined;
   const previous = entries.find(
-    (entry) => entry.end !== latest.end && entry.filed <= latest.filed,
+    (entry) => entry.end < latest.end && entry.filed <= latest.filed,
   );
   return {
     value: latest.val,
@@ -154,16 +183,28 @@ export function normalizeCompanyFacts(
   raw: unknown,
 ): FinancialSnapshot {
   const facts = companyFactsSchema.parse(raw);
-  const revenue = toFinancialValue(annualEntries(facts, TAGS.revenue, "USD"), "USD");
-  const grossProfit = toFinancialValue(annualEntries(facts, TAGS.grossProfit, "USD"), "USD");
-  const operatingIncome = toFinancialValue(annualEntries(facts, TAGS.operatingIncome, "USD"), "USD");
-  const netIncome = toFinancialValue(annualEntries(facts, TAGS.netIncome, "USD"), "USD");
-  const dilutedEps = toFinancialValue(annualEntries(facts, TAGS.dilutedEps, "USD/shares"), "USD/shares");
-  const operatingCashFlow = toFinancialValue(annualEntries(facts, TAGS.operatingCashFlow, "USD"), "USD");
-  const capitalExpenditure = toFinancialValue(annualEntries(facts, TAGS.capitalExpenditure, "USD"), "USD");
-  const cash = toFinancialValue(annualEntries(facts, TAGS.cash, "USD"), "USD");
+  const initialValues = [
+    toFinancialValue(annualEntries(facts, TAGS.revenue, "USD"), "USD"),
+    toFinancialValue(annualEntries(facts, TAGS.operatingIncome, "USD"), "USD"),
+    toFinancialValue(annualEntries(facts, TAGS.netIncome, "USD"), "USD"),
+    toFinancialValue(annualEntries(facts, TAGS.cash, "USD"), "USD"),
+  ];
+  const anchor = initialValues.find((value): value is FinancialValue => value !== undefined);
+  if (!anchor) throw new Error(`SEC returned no supported financial facts for ${ticker}`);
+  const periodEnd = anchor.periodEnd;
+  const annualValue = (tags: readonly string[], unit: string) =>
+    toFinancialValue(annualEntries(facts, tags, unit, periodEnd), unit, periodEnd);
+
+  const revenue = annualValue(TAGS.revenue, "USD");
+  const grossProfit = annualValue(TAGS.grossProfit, "USD");
+  const operatingIncome = annualValue(TAGS.operatingIncome, "USD");
+  const netIncome = annualValue(TAGS.netIncome, "USD");
+  const dilutedEps = annualValue(TAGS.dilutedEps, "USD/shares");
+  const operatingCashFlow = annualValue(TAGS.operatingCashFlow, "USD");
+  const capitalExpenditure = annualValue(TAGS.capitalExpenditure, "USD");
+  const cash = annualValue(TAGS.cash, "USD");
   const debtParts = [TAGS.debtCurrent, TAGS.debtNoncurrent]
-    .map((tags) => toFinancialValue(annualEntries(facts, tags, "USD"), "USD"))
+    .map((tags) => annualValue(tags, "USD"))
     .filter((value): value is FinancialValue => !!value);
   const debt = debtParts.length
     ? debtParts.slice(1).reduce((sum, value) => {
@@ -187,13 +228,11 @@ export function normalizeCompanyFacts(
     : undefined;
   const freeCashFlow = samePeriodDerived(operatingCashFlow, capitalExpenditure, (a, b) => a - Math.abs(b));
   const netCash = samePeriodDerived(cash, debt, (a, b) => a - b);
-  const anchor = revenue ?? operatingIncome ?? netIncome ?? cash;
-  if (!anchor) throw new Error(`SEC returned no supported financial facts for ${ticker}`);
   return {
     ticker,
     cik: String(facts.cik).padStart(10, "0"),
     entityName: facts.entityName,
-    periodEnd: anchor.periodEnd,
+    periodEnd,
     filed: anchor.filed,
     accession: anchor.accession,
     revenue,

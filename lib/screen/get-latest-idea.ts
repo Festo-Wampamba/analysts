@@ -2,6 +2,7 @@ import { desc, eq, isNotNull } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
 import type { DailyIdeaPayload } from "./types";
+import { coverageForSubScores } from "./score";
 
 export type LatestIdea = {
   tradingDate: string;
@@ -38,14 +39,48 @@ export type LatestIdea = {
     ticker: string;
     sector: string | null;
     compositeScore: number;
+    coverage?: number;
     subScores: unknown;
     catalyst: string | null;
   }[];
 };
 
-// Shared by GET /api/daily-idea and the homepage server render — one query,
-// two callers, kept in sync on purpose.
-export async function getLatestIdea(): Promise<LatestIdea | null> {
+const LATEST_IDEA_CACHE_TTL_MS = 60_000;
+let latestIdeaCache: { value: LatestIdea | null; expiresAt: number } | null = null;
+let activeLatestIdeaLoad: Promise<LatestIdea | null> | null = null;
+
+// Shared by GET /api/daily-idea and the homepage server render. Concurrent
+// callers share one query, recent successful reads make reloads immediate,
+// and a transient database outage does not erase the last verified result.
+export function getLatestIdea(): Promise<LatestIdea | null> {
+  if (latestIdeaCache && latestIdeaCache.expiresAt > Date.now()) {
+    return Promise.resolve(latestIdeaCache.value);
+  }
+  if (activeLatestIdeaLoad) return activeLatestIdeaLoad;
+
+  const load = loadLatestIdea()
+    .then((value) => {
+      latestIdeaCache = {
+        value,
+        expiresAt: Date.now() + LATEST_IDEA_CACHE_TTL_MS,
+      };
+      return value;
+    })
+    .catch((error: unknown) => {
+      if (latestIdeaCache) {
+        console.warn("latest idea refresh failed; serving last verified snapshot:", (error as Error).message);
+        return latestIdeaCache.value;
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (activeLatestIdeaLoad === load) activeLatestIdeaLoad = null;
+    });
+  activeLatestIdeaLoad = load;
+  return load;
+}
+
+async function loadLatestIdea(): Promise<LatestIdea | null> {
   const [latestAttempt] = await db
     .select()
     .from(schema.screenRuns)
@@ -120,6 +155,7 @@ export async function getLatestIdea(): Promise<LatestIdea | null> {
         ticker: c.ticker,
         sector: c.sector,
         compositeScore: Number(c.compositeScore),
+        coverage: coverageForSubScores(c.subScores as Record<string, number | null>),
         subScores: c.subScores,
         catalyst: c.catalyst,
       })),

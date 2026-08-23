@@ -291,7 +291,7 @@ describe("runDailyScreen happy path", () => {
     expect(state.insertedCandidates.map((c) => c.ticker)).toEqual(["AAA", "BBB"]);
   });
 
-  it("persists the top fifteen candidates in rank order when the universe is larger", async () => {
+  it("persists the top twenty candidates in rank order when the universe is larger", async () => {
     mockHappyPath();
     const expandedUniverse = Array.from({ length: TOP_CANDIDATES + 1 }, (_, index) => ({
       ticker: `T${String.fromCharCode(65 + index)}A`,
@@ -313,6 +313,7 @@ describe("runDailyScreen happy path", () => {
 
     const result = await runDailyScreen(expandedUniverse);
 
+    expect(TOP_CANDIDATES).toBe(20);
     expect(result.topCandidates).toHaveLength(TOP_CANDIDATES);
     expect(state.insertedCandidates).toHaveLength(TOP_CANDIDATES);
     expect(state.insertedCandidates.map((candidate) => candidate.rank)).toEqual(

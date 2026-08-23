@@ -6,6 +6,7 @@ import {
   ResearchWorkspaceView,
 } from "@/components/ResearchWorkspaceView";
 import { DailyIdeaView } from "@/components/DailyIdeaView";
+import type { CandidatePreview } from "@/components/CandidateResearchPreview";
 import {
   getResearchWorkspace,
   type ResearchWorkspace,
@@ -18,6 +19,7 @@ export default async function Home() {
   let latest: LatestIdea | null = null;
   let workspace: ResearchWorkspace | null = null;
   let researchError: string | null = null;
+  let livePreview: CandidatePreview | undefined;
 
   try {
     latest = await getLatestIdea();
@@ -28,7 +30,21 @@ export default async function Home() {
   const reportTicker = latest?.ticker ?? latest?.latestQualifyingTicker;
   if (reportTicker) {
     try {
-      workspace = await getResearchWorkspace(reportTicker);
+      const assembledWorkspace = await getResearchWorkspace(reportTicker);
+      workspace = assembledWorkspace;
+      const primaryQuote = assembledWorkspace.peers.find((peer) => peer.ticker === assembledWorkspace.report.ticker);
+      livePreview = {
+        ticker: assembledWorkspace.report.ticker,
+        companyName: assembledWorkspace.report.facts.company?.name,
+        currency: assembledWorkspace.report.facts.company?.currency,
+        marketCapMillions: assembledWorkspace.report.facts.company?.marketCapMillions,
+        price: primaryQuote?.price ?? assembledWorkspace.report.facts.quote?.price,
+        changePercent: primaryQuote?.changePercent ?? assembledWorkspace.report.facts.quote?.changePercent.value,
+        asOf: primaryQuote?.quoteAsOf ?? assembledWorkspace.chart?.asOf,
+        thesis: assembledWorkspace.report.narrative.thesis,
+        generatedAt: assembledWorkspace.report.generated.generatedAt,
+        generatedStatus: assembledWorkspace.report.generated.status,
+      };
     } catch (error) {
       console.error("homepage research load failed:", error);
       researchError = "The latest research report could not be assembled. The daily-screen result remains available below.";
@@ -40,10 +56,7 @@ export default async function Home() {
   return (
     <div className="app-shell">
       <AmbientLayer />
-      <AppTopbar
-        ticker={workspace?.report.ticker}
-        chartAsOf={workspace?.chart?.asOf}
-      />
+      <AppTopbar />
       {workspace ? (
         <ResearchWorkspaceView workspace={workspace} confidence={latest?.confidence} />
       ) : (
@@ -51,7 +64,7 @@ export default async function Home() {
           <Panel className="workspace-notice"><span>Research workspace</span><h1>Waiting for sourced company data</h1><p>{researchError}</p></Panel>
         </main>
       )}
-      <DailyIdeaView latest={latest} />
+      <DailyIdeaView latest={latest} livePreview={livePreview} />
       <AppFooter />
     </div>
   );

@@ -5,6 +5,7 @@ import {
   buildResearchFacts,
   hasMinimumFacts,
   type RawResearchSources,
+  type ResearchFacts,
 } from "./facts";
 import { verifyNumericClaims } from "@/lib/ai/guards";
 
@@ -168,5 +169,30 @@ describe("buildNumericAllowlist", () => {
 
   it("rejects a fabricated price target", () => {
     expect(verifyNumericClaims("price target of 310.00", allowlist).ok).toBe(false);
+  });
+
+  it("includes numbers echoed from sourced news headlines", () => {
+    const factsWithNews: ResearchFacts = {
+      ticker: "AAPL",
+      news: [
+        {
+          headline: "price hikes above 15%",
+          source: "Reuters",
+          url: "https://example.com/a",
+          date: "2026-08-01",
+        },
+      ],
+    };
+    expect(buildNumericAllowlist(factsWithNews)).toContain(15);
+  });
+
+  it("allows both the raw and the rounded form of a noisy float", () => {
+    const factsWithRawFloat: ResearchFacts = {
+      ticker: "TSLA",
+      company: { name: "Tesla", marketCapMillions: 1433132.8651042718 },
+    };
+    const rawAllowlist = buildNumericAllowlist(factsWithRawFloat);
+    expect(rawAllowlist).toContain(1433132.8651042718);
+    expect(rawAllowlist).toContain(1433132.8651);
   });
 });

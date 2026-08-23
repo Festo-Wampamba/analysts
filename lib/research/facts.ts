@@ -12,11 +12,18 @@ import type {
   Quote,
   Recommendations,
 } from "@/lib/source/finnhub-schemas";
-import { sanitizeSourceText, sanitizeSourceUrl } from "@/lib/ai/guards";
+import { extractNumericClaims, sanitizeSourceText, sanitizeSourceUrl } from "@/lib/ai/guards";
+import { formatFactsForPrompt } from "@/lib/domain/prompt-format";
 
 // The sourced-facts snapshot: everything the report may state as fact.
 // Anything absent here cannot legitimately appear in generated prose — the
 // numeric guard enforces exactly that using `numericAllowlist`.
+
+// How many entries of `facts.peers` the peer table (lib/research/workspace.ts)
+// renders, besides the researched ticker itself. The peers narrative
+// (lib/research/report.ts) must use the same limit so it never names a
+// ticker the table doesn't show.
+export const PEER_TABLE_LIMIT = 4;
 
 export type ResearchFacts = {
   ticker: string;
@@ -227,6 +234,10 @@ function collectNumbers(value: unknown, into: Set<number>): void {
 export function buildNumericAllowlist(facts: ResearchFacts): number[] {
   const allowed = new Set<number>();
   collectNumbers(facts, allowed);
+  // The prompt shows the model rounded numbers (see formatFactsForPrompt), so
+  // a compliant rounded echo must pass alongside the untouched raw value —
+  // and pre-existing cached prose that used the raw form must keep passing.
+  collectNumbers(formatFactsForPrompt(facts), allowed);
 
   // Finnhub reports market cap and share count in millions; prose will say
   // "$3.4 trillion" or "15.1 billion shares", so allow the expanded units too.
@@ -242,6 +253,14 @@ export function buildNumericAllowlist(facts: ResearchFacts): number[] {
   if (rec) {
     allowed.add(rec.strongBuy + rec.buy);
     allowed.add(rec.strongBuy + rec.buy + rec.hold + rec.sell + rec.strongSell);
+  }
+
+  // News headlines are shown to the model as sourced data; a figure echoed
+  // from a headline ("price hikes above 15%") is not a hallucination.
+  for (const item of facts.news ?? []) {
+    for (const claim of extractNumericClaims(item.headline)) {
+      allowed.add(claim.value);
+    }
   }
 
   return [...allowed];
