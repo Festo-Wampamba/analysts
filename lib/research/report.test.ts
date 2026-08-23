@@ -378,6 +378,40 @@ describe("getResearchReport numeric guard", () => {
     expect(report.narrative.limitations[0]).toContain("factual verification");
   });
 
+  // A raw float that IS in the sourced facts (so the numeric guard alone
+  // would allow it) still must not reach prose undisplayed — the
+  // post-generation decimal check is the defense-in-depth layer for that.
+  it("retries once when the first draft echoes an in-facts number at raw precision", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getQuote).mockResolvedValue(
+      sourced({ ...quote, dp: 4.569999999999999 }, "/quote"),
+    );
+    vi.mocked(groqJson)
+      .mockResolvedValueOnce(
+        mockGeneration(narrative({ thesis: "Shares rose 4.569999999999999%." })),
+      )
+      .mockResolvedValueOnce(mockGeneration(narrative()));
+
+    await getResearchReport("AAPL");
+
+    expect(groqJson).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back when the retry still echoes an in-facts number at raw precision", async () => {
+    mockAllProvidersOk();
+    vi.mocked(getQuote).mockResolvedValue(
+      sourced({ ...quote, dp: 4.569999999999999 }, "/quote"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ thesis: "Shares rose 4.569999999999999%." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+  });
+
   it("records the provider-error reason when generation throws a non-guard error", async () => {
     mockAllProvidersOk();
     vi.spyOn(console, "error").mockImplementation(() => {});

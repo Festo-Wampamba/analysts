@@ -185,4 +185,14 @@ describe("buildNumericAllowlist", () => {
     };
     expect(buildNumericAllowlist(factsWithNews)).toContain(15);
   });
+
+  it("allows both the raw and the rounded form of a noisy float", () => {
+    const factsWithRawFloat: ResearchFacts = {
+      ticker: "TSLA",
+      company: { name: "Tesla", marketCapMillions: 1433132.8651042718 },
+    };
+    const rawAllowlist = buildNumericAllowlist(factsWithRawFloat);
+    expect(rawAllowlist).toContain(1433132.8651042718);
+    expect(rawAllowlist).toContain(1433132.8651);
+  });
 });

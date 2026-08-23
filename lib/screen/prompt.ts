@@ -1,3 +1,5 @@
+import { roundNumbersForPrompt } from "@/lib/domain/prompt-format";
+
 import type { DailyIdeaFacts } from "./types";
 
 export const DAILY_IDEA_SYSTEM_PROMPT = `You are an equity analyst writing the daily stock idea for an investment platform. A quantitative screen has already chosen this company; your job is to explain the choice, not to re-pick it.
@@ -21,7 +23,9 @@ const DAILY_IDEA_SHAPE = `{
 }`;
 
 export function buildDailyIdeaUserPrompt(facts: DailyIdeaFacts): string {
-  const { news, ...factsWithoutNews } = facts;
+  // Rounded, not raw: provider-precision noise (e.g. 5196224.1462541735)
+  // must never reach the model, or it echoes that noise straight into prose.
+  const { news, ...factsWithoutNews } = roundNumbersForPrompt(facts);
   const promptFacts = {
     ...factsWithoutNews,
     metrics: Object.fromEntries(

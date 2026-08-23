@@ -13,6 +13,7 @@ import type {
   Recommendations,
 } from "@/lib/source/finnhub-schemas";
 import { extractNumericClaims, sanitizeSourceText, sanitizeSourceUrl } from "@/lib/ai/guards";
+import { formatFactsForPrompt } from "@/lib/domain/prompt-format";
 
 // The sourced-facts snapshot: everything the report may state as fact.
 // Anything absent here cannot legitimately appear in generated prose — the
@@ -227,6 +228,10 @@ function collectNumbers(value: unknown, into: Set<number>): void {
 export function buildNumericAllowlist(facts: ResearchFacts): number[] {
   const allowed = new Set<number>();
   collectNumbers(facts, allowed);
+  // The prompt shows the model rounded numbers (see formatFactsForPrompt), so
+  // a compliant rounded echo must pass alongside the untouched raw value —
+  // and pre-existing cached prose that used the raw form must keep passing.
+  collectNumbers(formatFactsForPrompt(facts), allowed);
 
   // Finnhub reports market cap and share count in millions; prose will say
   // "$3.4 trillion" or "15.1 billion shares", so allow the expanded units too.

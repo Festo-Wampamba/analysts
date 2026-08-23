@@ -26,6 +26,15 @@ import {
 } from "./facts";
 import { buildNumericCorrectionPrompt, buildResearchUserPrompt, RESEARCH_SYSTEM_PROMPT } from "./prompt";
 
+// Defense-in-depth: a number that IS in the sourced facts (so the numeric
+// guard alone allows it) can still reach prose at raw provider precision
+// instead of the rounded, display-grade form the prompt showed the model.
+const EXCESS_DECIMAL_PATTERN = /\d+\.\d{5,}/g;
+
+function findExcessDecimalNumbers(text: string): string[] {
+  return [...text.matchAll(EXCESS_DECIMAL_PATTERN)].map((match) => match[0]);
+}
+
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const QUOTE_FRESHNESS_MS = 15 * 60 * 1000;
 const NEWS_LOOKBACK_DAYS = 30;
@@ -140,12 +149,14 @@ async function generateVerifiedNarrative(
       },
       { ticker: facts.ticker, ...context },
     );
-    const guard = verifyNumericClaims(narrativeToText(result.data), allowlist);
-    return { result, guard };
+    const text = narrativeToText(result.data);
+    const guard = verifyNumericClaims(text, allowlist);
+    const excessDecimals = findExcessDecimalNumbers(text);
+    return { result, guard, excessDecimals };
   };
 
   const first = await attempt(buildResearchUserPrompt(facts));
-  if (first.guard.ok) {
+  if (first.guard.ok && first.excessDecimals.length === 0) {
     return {
       narrative: first.result.data,
       generated: first.result.meta,
@@ -155,13 +166,21 @@ async function generateVerifiedNarrative(
 
   // One corrective retry naming the rejected figures; models usually comply
   // once the specific offending strings are quoted back at them.
-  const offending = first.guard.violations.map((v) => v.raw);
+  const offending = [
+    ...first.guard.violations.map((v) => v.raw),
+    ...first.excessDecimals,
+  ];
   const second = await attempt(buildNumericCorrectionPrompt(facts, offending));
-  if (!second.guard.ok) {
+  if (!second.guard.ok || second.excessDecimals.length > 0) {
     throw new ReportError(
       "unverifiable_numbers",
       "generated report contained figures absent from the sourced facts",
-      { violations: second.guard.violations.map((v) => v.raw) },
+      {
+        violations: [
+          ...second.guard.violations.map((v) => v.raw),
+          ...second.excessDecimals,
+        ],
+      },
     );
   }
 
