@@ -62,6 +62,26 @@ export type FinancialSnapshot = {
   }>;
 };
 
+/**
+ * Provider-cache rows can outlive the code version that wrote them. Keep old
+ * SEC snapshots readable after adding display-only fields to this contract;
+ * the next cache refresh will replace them with the complete shape.
+ */
+export function normalizeCachedFinancialSnapshot(
+  data: Partial<FinancialSnapshot>,
+): FinancialSnapshot {
+  return {
+    ...data,
+    freeCashFlowAvailability: data.freeCashFlowAvailability ?? {
+      available: data.freeCashFlow !== undefined,
+      reason: data.freeCashFlow === undefined
+        ? "This cached SEC snapshot predates free-cash-flow provenance."
+        : undefined,
+    },
+    annualHistory: data.annualHistory ?? {},
+  } as FinancialSnapshot;
+}
+
 const tickerMapSchema = z.record(
   z.string(),
   z.object({ cik_str: z.number(), ticker: z.string(), title: z.string() }),
@@ -394,7 +414,9 @@ export async function getFinancialSnapshot(
   const symbol = ticker.toUpperCase();
   const cacheKey = { provider: PROVIDER, kind: "companyfacts", ticker: symbol };
   const cached = await readProviderCache<FinancialSnapshot>(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    return { ...cached, data: normalizeCachedFinancialSnapshot(cached.data) };
+  }
 
   const tickerMap = tickerMapSchema.parse(
     await secJson(TICKER_URL, "/files/company_tickers.json", { ...ctx, ticker: symbol }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeCompanyFacts } from "./sec";
+import { normalizeCachedFinancialSnapshot, normalizeCompanyFacts } from "./sec";
 
 function fact(val: number, end: string, filed: string, accn: string) {
   return { val, start: `${Number(end.slice(0, 4)) - 1}-01-01`, end, filed, accn, fy: Number(end.slice(0, 4)), fp: "FY", form: "10-K" };
@@ -144,6 +144,26 @@ describe("normalizeCompanyFacts", () => {
       value: 50,
       previousValue: 43,
       previousPeriodEnd: "2024-12-31",
+    });
+  });
+});
+
+describe("normalizeCachedFinancialSnapshot", () => {
+  it("keeps legacy provider-cache rows renderable after new fields are added", () => {
+    const snapshot = normalizeCachedFinancialSnapshot({
+      ticker: "NVDA",
+      cik: "0001045810",
+      entityName: "NVIDIA Corporation",
+      periodEnd: "2025-01-26",
+      filed: "2025-02-26",
+      accession: "legacy",
+      revenue: { value: 100, unit: "USD", periodEnd: "2025-01-26", form: "10-K", filed: "2025-02-26", accession: "legacy" },
+    });
+
+    expect(snapshot.annualHistory).toEqual({});
+    expect(snapshot.freeCashFlowAvailability).toEqual({
+      available: false,
+      reason: "This cached SEC snapshot predates free-cash-flow provenance.",
     });
   });
 });
