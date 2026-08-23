@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { FactorScoreChip, leadingFactor } from "@/components/FactorScoreChip";
 import {
   CandidateResearchPreview,
   type CandidatePreview,
@@ -33,7 +34,6 @@ export function CandidateCarousel({
   const [selectedIndex, setSelectedIndex] = useState(() => initialIndex(initialCandidates, initialTicker));
   const [paused, setPaused] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(ROTATION_SECONDS);
-  const [researchTicker, setResearchTicker] = useState<string | null>(initialTicker ?? initialCandidates[0]?.ticker ?? null);
   const trackRef = useRef<HTMLDivElement>(null);
   const selected = candidates[selectedIndex];
   const selectedTickerRef = useRef(selected?.ticker);
@@ -100,10 +100,9 @@ export function CandidateCarousel({
 
   if (!selected) return null;
 
-  function choose(index: number, loadResearch = true) {
+  function choose(index: number) {
     const nextIndex = (index + candidates.length) % candidates.length;
     setSelectedIndex(nextIndex);
-    if (loadResearch) setResearchTicker(candidates[nextIndex]?.ticker ?? null);
     setSecondsRemaining(ROTATION_SECONDS);
   }
 
@@ -154,7 +153,7 @@ export function CandidateCarousel({
         {candidates.map((candidate, index) => (
           <button
             type="button"
-            className={index === selectedIndex ? "is-selected" : ""}
+            className={[index === selectedIndex ? "is-selected" : "", candidate.ticker === initialTicker ? "is-winner" : ""].filter(Boolean).join(" ")}
             aria-pressed={index === selectedIndex}
             aria-label={`Show ${candidate.ticker}, ranked ${candidate.rank}`}
             data-candidate-index={index}
@@ -165,14 +164,20 @@ export function CandidateCarousel({
               <strong>{candidate.ticker}</strong>
               <b>{candidate.compositeScore.toFixed(2)}</b>
             </div>
+            {candidate.ticker === initialTicker && <small className="candidate-winner-tag">Today&apos;s idea</small>}
             <em>{candidate.sector ?? "Sector unavailable"}</em>
+            {(() => {
+              const factor = leadingFactor(candidate.subScores);
+              return factor ? <FactorScoreChip label={factor.label} score={factor.score} /> : null;
+            })()}
             <span>Rank {candidate.rank}</span>
+            {candidate.coverage !== undefined && <span>{(candidate.coverage * 100).toFixed(0)}% coverage confidence</span>}
           </button>
         ))}
       </div>
       <div className="candidate-carousel__selection" aria-live="polite">
         <div>
-          <span>Selected result</span>
+          <span>Now viewing</span>
           <strong>{selected.ticker}</strong>
           <p>{selected.catalyst ?? "Factor detail will be available in the sourced report."}</p>
         </div>
@@ -180,17 +185,7 @@ export function CandidateCarousel({
           Open full sourced report
         </Link>
       </div>
-      {candidates.length < 20 && (
-        <p className="candidate-carousel__legacy-note" role="status">
-          This completed screen retained {candidates.length} ranked candidates. New screens retain the top 20.
-        </p>
-      )}
-      {researchTicker && researchTicker !== selected.ticker && (
-        <p className="candidate-carousel__auto-note" role="status">
-          Auto rotation highlighted {selected.ticker}. Select it to load its sourced research; the preview below remains {researchTicker}.
-        </p>
-      )}
-      {researchTicker && <CandidateResearchPreview ticker={researchTicker} initial={initialPreview} />}
+      <CandidateResearchPreview ticker={selected.ticker} initial={initialPreview} />
     </section>
   );
 }

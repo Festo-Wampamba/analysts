@@ -19,7 +19,7 @@ beforeEach(() => {
     takeRecords = () => [];
     unobserve = vi.fn();
   });
-  document.body.innerHTML = ["overview", "financials", "valuation"].map((id) => `<section id="${id}"></section>`).join("");
+  document.body.innerHTML = ["overview", "business-model", "financials", "valuation", "peers", "growth-drivers", "catalysts", "risks", "cases", "thesis", "sources"].map((id) => `<section id="${id}"></section>`).join("");
 });
 
 afterEach(() => {
@@ -45,5 +45,12 @@ describe("ReportNav", () => {
     act(() => observerCallback?.([{ target: valuation, isIntersecting: true, boundingClientRect: { top: 120 } } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
 
     expect(screen.getByRole("link", { name: "Valuation" })).toHaveClass("is-active");
+  });
+
+  it("includes the business model and growth driver anchors", () => {
+    render(<ReportNav />);
+
+    expect(screen.getByRole("link", { name: "Business model" })).toHaveAttribute("href", "#business-model");
+    expect(screen.getByRole("link", { name: "Growth drivers" })).toHaveAttribute("href", "#growth-drivers");
   });
 });

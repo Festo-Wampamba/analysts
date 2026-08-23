@@ -1,6 +1,7 @@
 import { FactLabel, Panel } from "@/components/ResearchWorkspaceView";
 import { DEFAULT_SCORING_CONFIG } from "@/lib/screen/score";
 import { SCREEN_UNIVERSE } from "@/lib/screen/universe";
+import { TOP_CANDIDATES } from "@/lib/screen/run";
 import {
   MONTHLY_REPORT_ASSUMPTION,
   MONTHLY_REPORT_COUNT,
@@ -52,6 +53,7 @@ export function MethodologyAndCosts() {
             <li>Lower positive P/E, P/S, and debt-to-equity values score better; invalid negative valuation multiples are excluded.</li>
             <li>Missing factors are not treated as zero. Available weights are re-normalized and data coverage is reported separately.</li>
             <li>A pick requires a score of at least {DEFAULT_SCORING_CONFIG.threshold.toFixed(2)} and coverage of at least {DEFAULT_SCORING_CONFIG.minCoverage.toFixed(2)}. Otherwise the engine publishes no idea.</li>
+            <li>Each completed screen retains up to {TOP_CANDIDATES} ranked candidates for review; the daily workspace foregrounds the top five.</li>
           </ul>
         </Panel>
         <Panel className="cost-card">

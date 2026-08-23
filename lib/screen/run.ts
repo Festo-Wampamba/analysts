@@ -24,6 +24,7 @@ import {
 } from "./prompt";
 import {
   DEFAULT_SCORING_CONFIG,
+  coverageForSubScores,
   scoreCandidates,
   type CandidateInput,
   type ScoredCandidate,
@@ -389,7 +390,7 @@ async function readExistingRun(
         catalyst: c.catalyst ?? undefined,
         subScores: c.subScores as ScoredCandidate["subScores"],
         compositeScore: Number(c.compositeScore),
-        coverage: 0,
+        coverage: coverageForSubScores(c.subScores as ScoredCandidate["subScores"]),
         qualified: false,
       })),
     idea: (idea?.narrative as DailyIdeaPayload | undefined) ?? null,

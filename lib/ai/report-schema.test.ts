@@ -23,10 +23,9 @@ const validResearch = {
   limitations: ["Based on free-tier data only."],
 };
 
-const validModelResearch = (() => {
-  const { peers, ...rest } = validResearch;
-  return rest;
-})();
+const validModelResearch = Object.fromEntries(
+  Object.entries(validResearch).filter(([key]) => key !== "peers"),
+);
 
 describe("researchNarrativeSchema", () => {
   it("accepts a complete narrative", () => {

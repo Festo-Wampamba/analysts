@@ -22,6 +22,12 @@ const workspace = {
         change: { value: 1, formatted: "+1.00", direction: "positive" },
         changePercent: { value: 1, formatted: "+1.00%", direction: "positive" },
       },
+      balanceSheet: {
+        debtToEquityQuarterly: 0.25,
+        currentRatioQuarterly: 2.1,
+        quickRatioQuarterly: 1.8,
+      },
+      profitability: { roeTTM: 28.5, roaTTM: 17.25 },
       peers: ["AMD"],
     },
     narrative: {
@@ -72,5 +78,18 @@ describe("ResearchWorkspaceView fallback state", () => {
     expect(screen.getAllByText(/Fallback/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Verified fallback/)).not.toBeInTheDocument();
     expect(screen.getByText("Server-built · from the peer table above")).toBeInTheDocument();
+  });
+
+  it("renders dedicated business, growth, and sourced ratio sections", () => {
+    render(<ResearchWorkspaceView workspace={workspace} />);
+
+    expect(screen.getByRole("heading", { name: /Business model & competitive position/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Growth drivers/ })).toBeInTheDocument();
+    expect(screen.getByText("Debt / equity (quarterly)")).toBeInTheDocument();
+    expect(screen.getByText("Current ratio (quarterly)")).toBeInTheDocument();
+    expect(screen.getByText("Quick ratio (quarterly)")).toBeInTheDocument();
+    expect(screen.getByText("ROE (TTM)")).toBeInTheDocument();
+    expect(screen.getByText("ROA (TTM)")).toBeInTheDocument();
+    expect(screen.getByText("Figures cited in generated prose are sourced tiles above; wording is AI-generated.")).toBeInTheDocument();
   });
 });

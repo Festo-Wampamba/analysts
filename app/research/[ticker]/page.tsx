@@ -1,7 +1,4 @@
 import {
-  AmbientLayer,
-  AppFooter,
-  AppTopbar,
   Panel,
   ResearchWorkspaceView,
 } from "@/components/ResearchWorkspaceView";
@@ -48,7 +45,7 @@ export default async function ResearchTickerPage({
     ? <ResearchWorkspaceView workspace={workspace} />
     : <WorkspaceError title={errorTitle ?? "Research unavailable"} detail={errorDetail ?? "The report could not be assembled."} />;
 
-  return <div className="app-shell"><AmbientLayer /><AppTopbar ticker={workspace?.report.ticker} chartAsOf={workspace?.chart?.asOf} />{content}<AppFooter /></div>;
+  return content;
 }
 
 function WorkspaceError({ title, detail }: { title: string; detail: string }) {

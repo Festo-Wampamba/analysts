@@ -2,6 +2,7 @@ import { desc, eq, isNotNull } from "drizzle-orm";
 
 import { db, schema } from "@/lib/db";
 import type { DailyIdeaPayload } from "./types";
+import { coverageForSubScores } from "./score";
 
 export type LatestIdea = {
   tradingDate: string;
@@ -38,6 +39,7 @@ export type LatestIdea = {
     ticker: string;
     sector: string | null;
     compositeScore: number;
+    coverage?: number;
     subScores: unknown;
     catalyst: string | null;
   }[];
@@ -153,6 +155,7 @@ async function loadLatestIdea(): Promise<LatestIdea | null> {
         ticker: c.ticker,
         sector: c.sector,
         compositeScore: Number(c.compositeScore),
+        coverage: coverageForSubScores(c.subScores as Record<string, number | null>),
         subScores: c.subScores,
         catalyst: c.catalyst,
       })),

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getLatestIdea } from "@/lib/screen/get-latest-idea";
+import { isTradingDateStale } from "@/lib/screen/trading-date";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,10 @@ export async function GET() {
     return NextResponse.json({ error: "no_screen_yet" }, { status: 404 });
   }
 
-  const ageMs = Date.now() - new Date(`${idea.tradingDate}T23:59:59Z`).getTime();
   return NextResponse.json({
     ...idea,
     freshness: {
-      status: ageMs > 3 * 86_400_000 ? "stale" : "fresh",
+      status: isTradingDateStale(idea.tradingDate) ? "stale" : "fresh",
       asOf: idea.tradingDate,
     },
   });

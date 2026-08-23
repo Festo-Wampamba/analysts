@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DailyIdeaView } from "./DailyIdeaView";
+vi.mock("./CandidateCarousel", () => ({ CandidateCarousel: () => null }));
+
+import { DailyIdeaView, isStale } from "./DailyIdeaView";
 import type { LatestIdea } from "@/lib/screen/get-latest-idea";
 
 afterEach(cleanup);
@@ -108,5 +110,33 @@ describe("DailyIdeaView", () => {
     );
     expect(screen.getAllByText(/Fallback/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Verified fallback/)).not.toBeInTheDocument();
+  });
+
+  it("foregrounds five candidates and expands the retained queue", () => {
+    const candidates = Array.from({ length: 7 }, (_, index) => ({
+      rank: index + 1,
+      ticker: `T${index + 1}`,
+      sector: "Technology",
+      compositeScore: 0.8 - index * 0.02,
+      coverage: 0.9,
+      subScores: { growth: 0.8 - index * 0.02 },
+      catalyst: `Catalyst ${index + 1}`,
+    }));
+    const { container } = render(<DailyIdeaView latest={{ ...latest, candidates }} />);
+
+    expect(screen.getByRole("heading", { name: "Top 5 candidates" })).toBeInTheDocument();
+    expect(screen.getByText("7 screened · deterministic score")).toBeInTheDocument();
+    expect(container.querySelectorAll(".daily-table-card > .candidate-table > .candidate-row")).toHaveLength(6);
+
+    const disclosure = screen.getByText("See all 7 screened").closest("details");
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(within(disclosure as HTMLElement).getByText("T6")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("See all 7 screened"));
+    expect(disclosure).toHaveAttribute("open");
+  });
+
+  it("does not call a Friday result stale over the weekend", () => {
+    expect(isStale({ ...latest, tradingDate: "2026-08-21" }, new Date("2026-08-24T14:00:00.000Z"))).toBe(false);
+    expect(isStale({ ...latest, tradingDate: "2026-08-17" }, new Date("2026-08-20T14:00:00.000Z"))).toBe(true);
   });
 });

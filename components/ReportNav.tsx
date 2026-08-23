@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 
 export const reportSections = [
   ["overview", "Overview"],
+  ["business-model", "Business model"],
   ["financials", "Financials"],
   ["valuation", "Valuation"],
   ["peers", "Peers"],
+  ["growth-drivers", "Growth drivers"],
   ["catalysts", "Catalysts"],
   ["risks", "Risks"],
   ["cases", "Bull / Base / Bear"],

@@ -6,7 +6,6 @@ import {
   ResearchWorkspaceView,
 } from "@/components/ResearchWorkspaceView";
 import { DailyIdeaView } from "@/components/DailyIdeaView";
-import { MethodologyAndCosts } from "@/components/MethodologyAndCosts";
 import type { CandidatePreview } from "@/components/CandidateResearchPreview";
 import {
   getResearchWorkspace,
@@ -57,10 +56,7 @@ export default async function Home() {
   return (
     <div className="app-shell">
       <AmbientLayer />
-      <AppTopbar
-        ticker={workspace?.report.ticker}
-        chartAsOf={workspace?.chart?.asOf}
-      />
+      <AppTopbar />
       {workspace ? (
         <ResearchWorkspaceView workspace={workspace} confidence={latest?.confidence} />
       ) : (
@@ -69,7 +65,6 @@ export default async function Home() {
         </main>
       )}
       <DailyIdeaView latest={latest} livePreview={livePreview} />
-      <MethodologyAndCosts />
       <AppFooter />
     </div>
   );

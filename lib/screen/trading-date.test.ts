@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   currentTradingDate,
   isBusinessDay,
+  isTradingDateStale,
   toEasternDate,
+  tradingDaysSince,
   tradingDateWithHolidays,
 } from "./trading-date";
 
@@ -57,5 +59,19 @@ describe("tradingDateWithHolidays", () => {
       new Set(["2026-09-07"]),
     );
     expect(result).toBe("2026-09-04");
+  });
+});
+
+describe("trading-day freshness", () => {
+  it("does not treat Friday's result as stale on Monday", () => {
+    const monday = new Date("2026-08-10T16:00:00.000Z");
+    expect(tradingDaysSince("2026-08-07", monday)).toBe(1);
+    expect(isTradingDateStale("2026-08-07", monday)).toBe(false);
+  });
+
+  it("flags a multi-business-day gap", () => {
+    const thursday = new Date("2026-08-13T16:00:00.000Z");
+    expect(tradingDaysSince("2026-08-10", thursday)).toBe(3);
+    expect(isTradingDateStale("2026-08-10", thursday)).toBe(true);
   });
 });

@@ -136,13 +136,13 @@ export function CandidateResearchPreview({
   return (
     <section className="candidate-research-preview" aria-live="polite">
       <div className="candidate-research-preview__head">
-        <div><span className="eyebrow eyebrow--fact">Selected research · {data.ticker}</span><strong>{data.companyName ?? data.ticker}</strong><small>Live provider facts and a sourced narrative for this selected ranked candidate.</small></div>
+        <div><span className="eyebrow eyebrow--fact">Now viewing research · {data.ticker}</span><strong>{data.companyName ?? data.ticker}</strong><small>Live provider facts and a sourced narrative for this ranked candidate.</small></div>
         <Link className="button" href={`/research/${data.ticker}`}>Open full sourced report</Link>
       </div>
       <div className="candidate-research-preview__facts">
         <div><span>Latest quote</span><strong>{formatMoney(data.price, data.currency)}</strong>{data.changePercent !== undefined && <em className={data.changePercent >= 0 ? "trend-up" : "trend-down"}>{data.changePercent >= 0 ? "▲" : "▼"} {Math.abs(data.changePercent).toFixed(2)}%</em>}</div>
         <div><span>Latest provider bar</span><strong>{formatAsOf(data.asOf)}</strong></div>
-        <div><span>Research narrative</span><strong>{data.generatedStatus === "fallback" ? "Verified fallback" : "AI-generated"}</strong><small>{data.generatedAt ? `Generated ${formatAsOf(data.generatedAt)}` : "Generated time unavailable"}</small></div>
+        <div><span>Research narrative</span><strong>{data.generatedStatus === "fallback" ? "Fallback · sourced data only" : "AI-generated"}</strong><small>{data.generatedAt ? `Generated ${formatAsOf(data.generatedAt)}` : "Generated time unavailable"}</small></div>
       </div>
       {data.thesis && <p className="candidate-research-preview__thesis">{data.thesis}</p>}
     </section>

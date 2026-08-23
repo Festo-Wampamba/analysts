@@ -149,6 +149,12 @@ The arithmetic is executable in `lib/submission/costs.ts` and tested in
   it is not a complete market universe.
 - Provider rate limits or outages can leave a section unavailable. The app
   preserves verified data, labels freshness, and does not invent a value.
+- Live pricing currently has Finnhub as its single provider. Alpha Vantage and
+  Twelve Data already exist under `lib/source/` for chart history, but they are
+  not interchangeable quote failover sources yet. A production quote failover
+  would need normalized quote schemas, timestamp/provider precedence rules,
+  conflict logging in the source ledger, and a test matrix for stale,
+  contradictory, and partially available responses.
 - Current deployment uses one long-lived application instance, so its
   in-memory request coalescing and rate limits are not horizontally shared.
 - This is research software, not investment advice or a trading system.

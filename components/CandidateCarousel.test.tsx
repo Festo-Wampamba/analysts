@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CandidateCarousel } from "./CandidateCarousel";
 
 const candidates = [
-  { rank: 1, ticker: "NVDA", sector: "Technology", compositeScore: 0.82, subScores: {}, catalyst: "Strong revisions" },
-  { rank: 2, ticker: "GOOGL", sector: "Communication Services", compositeScore: 0.76, subScores: {}, catalyst: "Growth durable" },
+  { rank: 1, ticker: "NVDA", sector: "Technology", compositeScore: 0.82, coverage: 0.9, subScores: { growth: 0.8 }, catalyst: "Strong revisions" },
+  { rank: 2, ticker: "GOOGL", sector: "Communication Services", compositeScore: 0.76, coverage: 0.8, subScores: { growth: 0.7 }, catalyst: "Growth durable" },
 ];
 
 function researchPayload(ticker: string) {
@@ -78,15 +78,21 @@ describe("CandidateCarousel", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("auto-rotates candidates without scrolling the document", () => {
+  it("auto-rotates candidates without scrolling the document", async () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     expect(screen.getByText("Ranked research queue (2)")).toBeInTheDocument();
     expect(screen.getByText("Auto advance every 5 seconds")).toBeInTheDocument();
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
-    act(() => vi.advanceTimersByTime(5_000));
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("NVDA");
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("GOOGL has a sourced research thesis.")).toBeInTheDocument();
+    expect(screen.queryByText(/Auto rotation highlighted/)).not.toBeInTheDocument();
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     expect(HTMLElement.prototype.scrollTo).toHaveBeenCalled();
   });
@@ -95,9 +101,9 @@ describe("CandidateCarousel", () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Show next candidate" }));
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("GOOGL");
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("GOOGL");
     fireEvent.click(screen.getByRole("button", { name: "Show previous candidate" }));
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("NVDA");
   });
 
   it("pauses automatic rotation without changing the active candidate", () => {
@@ -106,7 +112,7 @@ describe("CandidateCarousel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause rotation" }));
     act(() => vi.advanceTimersByTime(5_000));
 
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("NVDA");
     expect(screen.getByText("Rotation paused")).toBeInTheDocument();
   });
 
@@ -130,20 +136,22 @@ describe("CandidateCarousel", () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
 
-    expect(screen.getByText("Selected result").parentElement).toHaveTextContent("NVDA");
+    expect(screen.getByText("Now viewing").parentElement).toHaveTextContent("NVDA");
     fireEvent.click(screen.getByRole("button", { name: "Show GOOGL, ranked 2" }));
     expect(screen.getByText("Updated growth evidence")).toBeInTheDocument();
   });
 
-  it("loads the selected ticker's own sourced research after manual selection", async () => {
+  it("follows the highlighted card and marks the qualifying winner", async () => {
     render(<CandidateCarousel candidates={candidates} initialTicker="NVDA" />);
     await flushResearchRequest();
 
     expect(screen.getByText("NVDA has a sourced research thesis.")).toBeInTheDocument();
+    expect(screen.getByText("Today's idea")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show GOOGL, ranked 2" }));
     await flushResearchRequest();
 
     expect(screen.getByText("GOOGL has a sourced research thesis.")).toBeInTheDocument();
     expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/research/GOOGL", { cache: "no-store" });
+    expect(screen.getByText("Today's idea").closest("button")).toHaveClass("is-winner");
   });
 });
