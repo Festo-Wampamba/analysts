@@ -89,4 +89,24 @@ describe("DailyIdeaView", () => {
     expect(screen.getByRole("link", { name: "Open report source audit" })).toHaveAttribute("href", "#sources");
     expect(screen.getByText((_, element) => element?.tagName === "SPAN" && element.textContent?.startsWith("Generated ") === true)).toBeInTheDocument();
   });
+
+  it("makes a deterministic fallback visibly distinct from generated research", () => {
+    render(
+      <DailyIdeaView
+        latest={{
+          ...latest,
+          idea: {
+            ...latest.idea!,
+            generated: { ...latest.idea!.generated, status: "fallback" },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "AI narrative temporarily unavailable — showing sourced data only.",
+    );
+    expect(screen.getAllByText(/Fallback/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Verified fallback/)).not.toBeInTheDocument();
+  });
 });

@@ -103,6 +103,9 @@ body::before {
 .eyebrow { display: inline-flex; align-items: center; gap: 7px; width: fit-content; color: var(--mint); font-family: var(--font-ibm-plex-mono), monospace; font-size: .65rem; letter-spacing: .13em; line-height: 1.2; text-transform: uppercase; }
 .eyebrow--fact { padding: 5px 11px; border: 1px solid rgba(143,184,216,.24); border-radius: 999px; background: rgba(143,184,216,.07); }
 .eyebrow--ai { color: var(--mint); }
+.eyebrow--fallback { padding: 5px 11px; border: 1px solid rgba(245,158,11,.35); border-radius: 999px; background: rgba(245,158,11,.1); color: #d6b878; }
+.fallback-banner { display: flex; align-items: center; gap: 9px; margin: 0; padding: 11px 14px; border: 1px solid rgba(245,158,11,.35); border-radius: 10px; background: rgba(245,158,11,.09); color: #e3c68a; font-size: .875rem; }
+.fallback-banner .chip-icon { flex-shrink: 0; }
 .hero-title-row { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .hero-title-row h1 { margin: 0; color: #f4f4f5; font-family: var(--font-space-grotesk), sans-serif; font-size: 3.5rem; font-weight: 500; letter-spacing: -.03em; line-height: 1; }
 .hero-title-row div { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
