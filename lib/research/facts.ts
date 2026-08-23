@@ -12,7 +12,7 @@ import type {
   Quote,
   Recommendations,
 } from "@/lib/source/finnhub-schemas";
-import { sanitizeSourceText, sanitizeSourceUrl } from "@/lib/ai/guards";
+import { extractNumericClaims, sanitizeSourceText, sanitizeSourceUrl } from "@/lib/ai/guards";
 
 // The sourced-facts snapshot: everything the report may state as fact.
 // Anything absent here cannot legitimately appear in generated prose — the
@@ -242,6 +242,14 @@ export function buildNumericAllowlist(facts: ResearchFacts): number[] {
   if (rec) {
     allowed.add(rec.strongBuy + rec.buy);
     allowed.add(rec.strongBuy + rec.buy + rec.hold + rec.sell + rec.strongSell);
+  }
+
+  // News headlines are shown to the model as sourced data; a figure echoed
+  // from a headline ("price hikes above 15%") is not a hallucination.
+  for (const item of facts.news ?? []) {
+    for (const claim of extractNumericClaims(item.headline)) {
+      allowed.add(claim.value);
+    }
   }
 
   return [...allowed];

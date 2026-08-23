@@ -365,4 +365,28 @@ describe("getResearchReport numeric guard", () => {
     expect(insertedReports).toHaveLength(1);
     expect(insertedReports[0].model).toBe("deterministic-safety-fallback");
   });
+
+  it("records the factual-verification reason in the fallback limitations", async () => {
+    mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockResolvedValue(
+      mockGeneration(narrative({ thesis: "Revenue will hit $394.3 billion." })),
+    );
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.narrative.limitations[0]).toContain("factual verification");
+  });
+
+  it("records the provider-error reason when generation throws a non-guard error", async () => {
+    mockAllProvidersOk();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(groqJson).mockRejectedValue(new Error("groq request timed out"));
+
+    const report = await getResearchReport("AAPL");
+
+    expect(report.generated.status).toBe("fallback");
+    expect(report.narrative.limitations[0]).toContain("provider error");
+    expect(report.narrative.limitations[0]).not.toContain("factual verification");
+  });
 });

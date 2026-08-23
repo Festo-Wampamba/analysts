@@ -172,13 +172,26 @@ async function generateVerifiedNarrative(
   };
 }
 
-function deterministicResearchFallback(facts: ResearchFacts): {
+// The fallback fires for two unrelated causes — the guard rejected the
+// prose, or the provider call itself failed (network/HTTP error) — and the
+// shown limitation must name the one that actually happened.
+function fallbackReason(error: unknown): string {
+  return error instanceof ReportError && error.code === "unverifiable_numbers"
+    ? "Model output failed factual verification"
+    : "AI narrative generation was unavailable (provider error)";
+}
+
+function deterministicResearchFallback(
+  facts: ResearchFacts,
+  error: unknown,
+): {
   narrative: ResearchNarrative;
   generated: GeneratedContentMeta;
   model: string;
 } {
   const company = facts.company?.name ?? facts.ticker;
   const hasNews = !!facts.news?.length;
+  const reason = fallbackReason(error);
   return {
     narrative: {
       overview: `${company} is presented from the sourced company profile and market-data snapshot available to this report.`,
@@ -211,13 +224,13 @@ function deterministicResearchFallback(facts: ResearchFacts): {
       ],
       thesis:
         "The investment case should be based on the sourced operating evidence, valuation context, and identified risks rather than generated forecasts.",
-      limitations: ["Model output failed factual verification, so deterministic explanatory text is shown."],
+      limitations: [`${reason}, so deterministic explanatory text is shown.`],
     },
     generated: {
       generatedAt: new Date().toISOString(),
       basedOn: Object.keys(facts).filter((key) => key !== "ticker"),
       modelLabel: "deterministic-safety-fallback",
-      limitations: ["Model output failed factual verification."],
+      limitations: [`${reason}.`],
       status: "fallback",
     },
     model: "deterministic-safety-fallback",
@@ -312,7 +325,7 @@ export async function getResearchReport(
     generatedReport = await generateVerifiedNarrative(facts, allowlist, context);
   } catch (error) {
     console.error("research generation verification failed; using fallback:", error);
-    generatedReport = deterministicResearchFallback(facts);
+    generatedReport = deterministicResearchFallback(facts, error);
   }
   const { narrative, generated, model } = generatedReport;
 

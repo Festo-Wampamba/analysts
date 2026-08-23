@@ -95,6 +95,32 @@ describe("verifyNumericClaims", () => {
       true,
     );
   });
+
+  it("accepts prose stating the magnitude of a negative sourced figure", () => {
+    expect(
+      verifyNumericClaims("shares fell 2.13 to close lower", [-2.13]).ok,
+    ).toBe(true);
+  });
+
+  it("does not let an unrelated positive claim match a negative fact of different magnitude", () => {
+    expect(
+      verifyNumericClaims("shares fell 9.99 to close lower", [-2.13]).ok,
+    ).toBe(false);
+  });
+
+  it("exempts a hyphenated period term from the numeric guard", () => {
+    expect(verifyNumericClaims("the 52-week high of 236.54", [236.54]).ok).toBe(
+      true,
+    );
+  });
+
+  it("exempts a space-separated period term from the numeric guard", () => {
+    expect(verifyNumericClaims("trading over 52 weeks", []).ok).toBe(true);
+  });
+
+  it("still flags a bare number that happens to equal a period-term value", () => {
+    expect(verifyNumericClaims("revenue of 52", [10]).ok).toBe(false);
+  });
 });
 
 describe("sanitizeSourceText", () => {

@@ -38,16 +38,22 @@ const NUMBER_PATTERN = new RegExp(
   "gi",
 );
 
-export function extractNumericClaims(text: string): NumericClaim[] {
-  const claims: NumericClaim[] = [];
+type IndexedClaim = NumericClaim & { index: number; matchLength: number };
+
+function extractIndexedClaims(text: string): IndexedClaim[] {
+  const claims: IndexedClaim[] = [];
   for (const match of text.matchAll(NUMBER_PATTERN)) {
     const [raw, digits, suffix] = match;
     const bare = digits.replace(/,/g, "");
     const value = Number(bare) * (suffix ? SUFFIX_MULTIPLIERS[suffix.toLowerCase()] : 1);
     if (!Number.isFinite(value)) continue;
-    claims.push({ raw: raw.trim(), value });
+    claims.push({ raw: raw.trim(), value, index: match.index ?? 0, matchLength: raw.length });
   }
   return claims;
+}
+
+export function extractNumericClaims(text: string): NumericClaim[] {
+  return extractIndexedClaims(text).map(({ raw, value }) => ({ raw, value }));
 }
 
 // Tolerance from displayed precision: "228" may stand for anything in
@@ -71,21 +77,41 @@ function isExemptInteger(claim: NumericClaim, allowYears: boolean): boolean {
   return false;
 }
 
+// "52-week high", "trading over 52 weeks": the number names a lookback
+// window, not a data point, so it never needs to trace to the allowlist.
+// The leading separator is optional because NUMBER_PATTERN's trailing `\s?`
+// (reserved for a magnitude suffix) already consumes a space-joined case
+// ("52 weeks" -> match "52 ", leaving "weeks" with no separator left).
+const PERIOD_TERM = /^[\s-]?(week|day|month|year)s?\b/i;
+
+function isPeriodVocabulary(text: string, claim: IndexedClaim): boolean {
+  return PERIOD_TERM.test(text.slice(claim.index + claim.matchLength));
+}
+
 export function verifyNumericClaims(
   text: string,
   allowedNumbers: number[],
   opts: { allowYears?: boolean } = {},
 ): NumericGuardResult {
   const allowYears = opts.allowYears ?? true;
-  const claims = extractNumericClaims(text);
+  const indexedClaims = extractIndexedClaims(text);
+  const claims = indexedClaims.map(({ raw, value }) => ({ raw, value }));
 
-  const violations = claims.filter((claim) => {
-    if (isExemptInteger(claim, allowYears)) return false;
-    const tolerance = toleranceOf(claim);
-    return !allowedNumbers.some(
-      (allowed) => Math.abs(claim.value - allowed) <= tolerance,
-    );
-  });
+  const violations = indexedClaims
+    .filter((claim) => {
+      if (isExemptInteger(claim, allowYears)) return false;
+      if (isPeriodVocabulary(text, claim)) return false;
+      const tolerance = toleranceOf(claim);
+      return !allowedNumbers.some((allowed) => {
+        if (Math.abs(claim.value - allowed) <= tolerance) return true;
+        // Prose states the magnitude of a signed move ("fell 2.13") while the
+        // sourced fact carries the sign ("-2.13"); compare by absolute value
+        // only when the allowed fact is negative, so this can't also make an
+        // unrelated positive fact excuse a fabricated negative claim.
+        return allowed < 0 && Math.abs(claim.value - Math.abs(allowed)) <= tolerance;
+      });
+    })
+    .map(({ raw, value }) => ({ raw, value }));
 
   return { ok: violations.length === 0, violations, claims };
 }
